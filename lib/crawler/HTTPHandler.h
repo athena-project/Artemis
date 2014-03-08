@@ -5,13 +5,18 @@
 #include <string>
 #include <sstream>
 #include <utility>
-#include "HTTPHeaderReponse.h"
+#include <vector>
+#include <time.h>
+
 #include </usr/include/curl/curl.h>
 
+#include "HTTPHeaderReponse.h"
+#include "Hephaistos/WebRessource.h"
 
 
 
 using namespace std;
+using namespace Athena::Hephaistos;
 
 namespace Athena{
     namespace Artemis{
@@ -27,7 +32,9 @@ namespace Athena{
             public :
 
                 HTTPHandler(vector< string >const& contentTypes, vector< string >const& pageContentTypes, string agent="");
-                pair< HTTPHeaderReponse, string > get(string const& url);
+
+                bool validHeader(HTTPHeaderReponse& header);
+                pair< HTTPHeaderReponse, Hephaistos::WebRessource > get(string const& url);
                 static size_t writeInString ( void *contents, size_t size, size_t nmemb, void *userdata);
 
         };

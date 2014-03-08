@@ -2,20 +2,21 @@
 
 namespace Athena{
     namespace Artemis{
-        WebCrawlerNode(){}
-        WebCrawlerNode(string ip, int port, int state = AVAILABLE ){
+
+        WebCrawlerNode::WebCrawlerNode(){}
+        WebCrawlerNode::WebCrawlerNode(string ip, int port, int state ){
             this->ip=ip; this->port=port; this->state=state;
         }
 
-        string setIp(string i){ ip=i; }
-        int setPort( int p){ port=p; }
-        int setState( int s ){ state=s; }
+        string WebCrawlerNode::setIp(string i){ ip=i; }
+        int WebCrawlerNode::setPort( int p){ port=p; }
+        int WebCrawlerNode::setState( int s ){ state=s; }
 
-        string getIp(){ return ip; }
-        int getPort(){ return port; }
-        int getState(){ return state; }
+        string WebCrawlerNode::getIp(){ return ip; }
+        int WebCrawlerNode::getPort(){ return port; }
+        int WebCrawlerNode::getState(){ return state; }
 
-        bool isAvailable(){ return (state==AVAILABLE); }
+        bool WebCrawlerNode::isAvailable(){ return (state==AVAILABLE); }
 
     }
 

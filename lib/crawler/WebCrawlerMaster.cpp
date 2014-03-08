@@ -1,4 +1,4 @@
-#incude "WebCrawlerMaster.h"
+#include "WebCrawlerMaster.h"
 
 namespace Athena{
     namespace Artemis{
@@ -20,7 +20,7 @@ namespace Athena{
             connect(socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT( socketError(QAbstractSocket::SocketError) ) );
             msgSize = 0;
 
-            socket->connectToHost( ip, port);
+            socket->connectToHost( QString(ip.c_str()), port);
         }
 
         WebCrawlerMaster::~WebCrawlerMaster(){
@@ -32,15 +32,16 @@ namespace Athena{
                 Network
         **/
         void WebCrawlerMaster::sendData(){
-            stringstream stream;
+            //Serialisation à faire
+            /*stringstream stream;
             boost::archive::text_oarchive archive( stream );
-            archive << returnUrls;
+            archive << returnUrls;*/
 
             QByteArray paquet;
             QDataStream out(&paquet, QIODevice::WriteOnly);
 
             out << (unsigned int) 0;
-            out << stream.str();
+            //out << stream.str();
             out.device()->seek(0);
             out << (unsigned int) (paquet.size() - sizeof( unsigned int ) );
 
@@ -62,13 +63,14 @@ namespace Athena{
             if (socket->bytesAvailable() < msgSize) // Si on n'a pas encore tout reçu, on arrête la méthode
                 return;
 
-            string msg;
+            //Sérialisation à faire
+           /* string msg;
             in >> msg;
 
             std::stringstream stream();
             stream << msg;
             boost::archive::text_iarchive archive(stream);
-            stream >> urls;
+            stream >> urls;*/
 
             msgSize=0;
         }
@@ -77,32 +79,31 @@ namespace Athena{
 
         }
 
-        void FenClient::erreurSocket(QAbstractSocket::SocketError erreur){
-            string error
-            switch(erreur)
+        void WebCrawlerMaster::socketError(QAbstractSocket::SocketError error){
+            string buffer;
+            switch(error)
             {
                 case QAbstractSocket::HostNotFoundError:
-                    error = "Error host not found.";
+                    buffer = "Error host not found.";
                     break;
                 case QAbstractSocket::ConnectionRefusedError:
-                    error = "Error connection refused by the server.";
+                    buffer = "Error connection refused by the server.";
                     break;
                 case QAbstractSocket::RemoteHostClosedError:
-                    error = "Error closed connections.";
-                    listeMessages->append(tr("<em>ERREUR : le serveur a coupé la connexion.</em>"));
+                    buffer = "Error closed connections.";
                     break;
                 default:
-                    error = "Error";
+                    buffer = "Error";
             }
-            throw error; //a mettre ddans les logs
+            throw buffer; //a mettre ddans les logs
         }
 
 
         /**
             Threads
         **/
-        queue<string> createUrlsBundle(){
-            queue< string > bundle;
+        queue< pair<string,bool> > WebCrawlerMaster::createUrlsBundle(){
+            queue< pair<string,bool> > bundle;
             int i=0;
 
             while( i < urlsPerThread && !urls.empty() ){
@@ -113,16 +114,16 @@ namespace Athena{
             return bundle;
         }
 
-        void WebCrawlerMaster::newSlave( void* t ){
+        void* WebCrawlerMaster::newSlave( void* t ){
             WebCrawlerMaster* self= (WebCrawlerMaster*) t;
 
-            WebCrawlerSlave slave(createUrlsBundle(), &visitedDomain, &mutex_visited, contentTypes, pageContentTypes);
+            WebCrawlerSlave slave( self->createUrlsBundle(), (self->visitedDomain), &(self->mutex_visited), self->contentTypes, self->pageContentTypes);
             list< string > tmpUrls = slave.crawl();
 
-            pthread_mutex_lock( &mutex_return );
+            pthread_mutex_lock( &(self->mutex_return) );
             for( list< string >::iterator it = tmpUrls.begin(); it!=tmpUrls.end(); it++ )
                 self->returnUrls.push_back( *it );
-            pthread_mutex_unlock( &mutex_return );
+            pthread_mutex_unlock( &(self->mutex_return) );
         }
 
         void WebCrawlerMaster::harness(){
@@ -133,7 +134,8 @@ namespace Athena{
 
 
                         while( numThreads < maxThreads && numThreads < neededThreads ){
-                            pthread_create( *threads.end(), NULL, &newSlave, this);
+                            pthread_t tmp;
+                            pthread_create( &tmp , NULL, &newSlave, this);
                             numThreads++;
                         }
                     }

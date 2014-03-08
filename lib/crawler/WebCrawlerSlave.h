@@ -7,8 +7,10 @@
 #include <map>
 #include <algorithm>    // std::find
 
-#include "HTTPHandler"
-#include "HTTPHeaderReponse"
+#include "HTTPHandler.h"
+#include "Hephaistos/WebRessource.h"
+#include "Hephaistos/WebRessourceHandler.h"
+#include "HTTPHeaderReponse.h"
 
 using namespace std;
 
@@ -26,23 +28,22 @@ namespace Athena{
                 map< string, pair< long int, int> > visitedDomain; // domain, last visit time, nbr of visit the last second
                 int nRQS; //numbre of requete per domain
 
-                queue< WebRessource* > ressources;//ressources : url, contentType, data
+                Hephaistos::WebRessourceHandler* ressourceHandler;
+                queue< WebRessource > ressources;//ressources : url, contentType, data
                 int ressourcesMaxSize;
                 int ressourcesSize;
 
                 pthread_mutex_t *mutex_visited;
             public:
-                WebCrawlerSlave(queue< string > urls, map< string, pair< long int, int> >& visitedDomain,
+                WebCrawlerSlave(queue< pair<string,bool> > urls, map< string, pair< long int, int> >& visitedDomain,
 pthread_mutex_t* mutex_visited, vector< string >const& contentTypes, vector< string >const& pageContentTypes);
                 ~WebCrawlerSlave();
 
                 void setNRQS( int n);
-                void setPagesSize( int n);
                 void setRessourcesSize( int n);
-                void setContentTypes( vector<string> t );
 
                 bool validHeader(HTTPHeaderReponse& header);
-                void addUrl( list<string>const&  newUrls );
+                void addUrl( list<string>&  newUrls );
 
                 void work();
                 list< string > crawl();

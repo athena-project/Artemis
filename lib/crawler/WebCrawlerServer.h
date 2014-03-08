@@ -3,19 +3,23 @@
 
 #include <string>
 #include <vector>
+#include <utility>
 #include <map>
 #include <list>
-//#include <QtNetwork>
+#include <queue>
+#include <sstream>
+#include <QtNetwork>
 
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
+#include <boost/serialization/string.hpp>
+#include <boost/serialization/list.hpp>
+#include <boost/regex.hpp>
 
-//#include "WebCrawlerNode.h"
+#include "WebCrawlerNode.h"
 
 
 namespace Athena{
     namespace Artemis{
-        class WebCrawlerServer{
+        class WebCrawlerServer : public QObject{
             protected:
                 QTcpServer* tcpServer;
                 vector< QTcpSocket * > clients;
@@ -49,14 +53,14 @@ namespace Athena{
                 void setUrlRules(vector<string> rules);
                 void addUrlRules();
 
-                vector< WebCrawlerNode* > getNodeByState(int state);
-                WebCrawlerNode*  getNodeByIp( string ip);
+                vector< pair<WebCrawlerNode*,int> > getNodeByState(int state);
+                pair<WebCrawlerNode*,int>   getNodeByIp( string ip);
 
-                bool validUrl(string const& url)
-                void addUrls( list< string > const &urls );
-                list< string > createUrlsBundle();
+                bool validUrl(string const& url);
+                void addUrls( list< string >& urls );
+                queue< pair<string,bool> > createUrlsBundle();
 
-                void sendWork(list< string >const & urls);
+                void sendWork(queue< pair<string, bool> >const & urls, int nodeLocation);
 
 
 

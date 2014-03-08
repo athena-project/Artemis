@@ -14,34 +14,39 @@ namespace Athena{
             //Tcp server
             msgSize = 0;
             tcpServer = new QTcpServer(this);
-            if ( !serveur->listen(QHostAddress::Any, 33755) ){
-                throw "error server "
+            if ( !tcpServer->listen(QHostAddress::Any, 33755) ){
+                throw "error server ";
             }
             connect(tcpServer, SIGNAL(newConnection()), this, SLOT(initCo()));
         }
 
-        ~WebCrawlerServer(){
-            delete [] tcpServer;
-            delete [] nodes;
+        WebCrawlerServer::~WebCrawlerServer(){
+            delete tcpServer;
+            for(int i=0; i<clients.size(); i++ ){//same number of client and node
+                delete clients[i];
+                delete nodes[i];
+            }
         }
 
         /**
                 Divers
         **/
-        vector< WebCrawlerNode* > getNodeByState(int state){
-            vector< WebCrawlerNode* >  currentNodes;
+        vector< pair<WebCrawlerNode*,int> > WebCrawlerServer::getNodeByState(int state){
+            vector< pair<WebCrawlerNode*,int> >  currentNodes;
             for(int i=0; i<nodes.size(); i++){
-                if( nodes[i]->isAvailable() )
-                    currentNodes.push_back( nodes[i] );
+                if( nodes[i]->isAvailable() ){
+                   currentNodes.push_back(  make_pair(nodes[i], i) );
+                }
             }
             return currentNodes;
         }
-        WebCrawlerNode*  getNodeByIp( string ip){
+
+        pair<WebCrawlerNode*,int>  WebCrawlerServer::getNodeByIp( string ip){
             for(int i=0; i<nodes.size(); i++)
                 if(nodes[i]->getIp() == ip)
-                    return nodes[i];
+                    return pair<WebCrawlerNode*,int>(nodes[i],i);
 
-            return WebCrawlerNode();
+            return pair<WebCrawlerNode*,int> (NULL,0);
         }
 
         /**
@@ -54,7 +59,7 @@ namespace Athena{
             connect( socket, SIGNAL(readyRead()), this, SLOT(receivedData()));
             connect( socket, SIGNAL(disconnected()), this, SLOT(endCo()));
 
-            nodes.push_back( new WebCrawlerNode( socket->localAdress().toString().toStlString(), (int)socket->localPort(), WebCrawlerNode::AVAILABLE ) );
+            nodes.push_back( new WebCrawlerNode( socket->peerAddress().toString().toStdString(), (int)socket->localPort(), WebCrawlerNode::AVAILABLE ) );
         }
 
         void WebCrawlerServer::receivedData(){
@@ -72,15 +77,18 @@ namespace Athena{
             if (socket->bytesAvailable() < msgSize) // Si on n'a pas encore tout reçu, on arrête la méthode
                 return;
 
-            string msg;
+
+            //Serialisation à faire soit qt, soit boost, soit à la main ici et dans master
+            /*QString msg;
             in >> msg;
 
-            list< string > urls;
-            std::stringstream stream();
-            stream << msg;
-            boost::archive::text_iarchive archive(stream);
+            list< string > tmpUrls;
+            QDataStream out;
+            ostringstream stream;
+            stream << 1;//(msg.toStdString()) ;
+            boost::archive::text_iarchive archive(stream.str());
             stream >> urls;
-            addUrls( urls );
+            addUrls( urls );*/
 
             msgSize=0;
     }
@@ -90,25 +98,24 @@ namespace Athena{
             if (socket == 0) // Si par hasard on n'a pas trouvé le client à l'origine du signal, on arrête la méthode
                 return;
 
-            string ip = socket->localAdress().toString().toStlString();
-            int i=0;
+            string ip = socket->peerAddress().toString().toStdString();
 
-            while( i < nodes.size() ){
-                if(nodes[i]->getIp() == url){
+            for(int i=0 ; i < nodes.size(); i++ ){
+                if(nodes[i]->getIp() == ip){
                     nodes.erase( nodes.begin() + i );
-                    i= nodes.size();
+                    delete clients[i];
+                    clients.erase( clients.begin() + i );
                 }
-                i++;
             }
 
-            clients.removeOne(socket);
             socket->deleteLater();
         }
 
-        void WebCrawlerServer::sendWork(list< string >const & urls, int nodeLocation){
-            stringstream stream;
+        void WebCrawlerServer::sendWork(queue< pair<string, bool> >const & urls, int nodeLocation){
+            /*de même serialisation
+             *stringstream stream;
             boost::archive::text_oarchive archive( stream );
-            archive << urls;
+            archive << urls;*/
 
 
              // Préparation du paquet
@@ -116,7 +123,7 @@ namespace Athena{
             QDataStream out(&paquet, QIODevice::WriteOnly);
 
             out << (unsigned int) 0; // On écrit 0 au début du paquet pour réserver la place pour écrire la taille
-            out << stream.str(); // On ajoute le message à la suite
+            //out << stream.str(); // On ajoute le message à la suite
             out.device()->seek(0); // On se replace au début du paquet
             out << (unsigned int) (paquet.size() - sizeof(unsigned int)); // On écrase le 0 qu'on avait réservé par la longueur du message
 
@@ -151,26 +158,26 @@ namespace Athena{
 
 
             long int t = static_cast<long int> (time(NULL));
-            map< string, pair< long int, unsigned char* > > ::iterator itVisitedUrl = visitedUrl.find(url);
-            if( itVisitedUrl!=visitedUrl.end() && itVisitedUrl->second.first+refreshDelay>t)//Url already visited and delay not over
+            map< string, pair< long int, unsigned char* > > ::iterator itVisitedUrl = visitedUrls.find(url);
+            if( itVisitedUrl!=visitedUrls.end() && itVisitedUrl->second.first+refreshDelay>t)//Url already visited and delay not over
                 return false;
 
 
 
 
-            if(itVisitedUrl!=visitedUrl.end())
+            if(itVisitedUrl!=visitedUrls.end())
                 itVisitedUrl->second.first=t;
             else if( visitedUrls.size() <= maxVisitedUrls )
-                visitedUrl.insert(  pair< string, pair< long int, unsigned char*>  >(
+                visitedUrls.insert(  pair< string, pair< long int, unsigned char*>  >(
                                     url, pair< long int, unsigned char* > (t, NULL)
                                 ) );
             return true;
         }
 
 
-        void WebCrawlerServer::addUrls( list< string > const &urls ){
+        void WebCrawlerServer::addUrls( list< string >  &urls ){
             for( list< string >::iterator it = urls.begin() ; it != urls.end() ; it++ )
-                if( validUrl(*it) && urlsMaps.size() <= maxUrls )
+                if( validUrl(*it) && urlsMap.size() <= maxUrls )
                     urlsMap[ *it ] = true;
         }
 
@@ -187,7 +194,7 @@ namespace Athena{
         }
 
         void WebCrawlerServer::summonToWork(){
-            vector< pair<WebCrawlerNode, int> > availableNodes = getNodeByState( WebCrawlerNode::AVAILABLE ); //int => ordre dans le tableau ie mêm ordre pr les sockets
+            vector< pair<WebCrawlerNode*, int> > availableNodes = getNodeByState( WebCrawlerNode::AVAILABLE ); //int => ordre dans le tableau ie mêm ordre pr les sockets
             int i=0;
             while( i<availableNodes.size() && !urlsMap.empty() ){
                 sendWork( createUrlsBundle(), availableNodes[i].second );

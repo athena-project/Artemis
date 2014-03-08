@@ -3,11 +3,11 @@
 namespace Athena{
     namespace Artemis{
 
-        WebCrawlerSlave::WebCrawlerSlave(queue< string > urls, map< string, pair< long int, int> >& visitedDomain,
+        WebCrawlerSlave::WebCrawlerSlave(queue< pair<string,bool> > urls, map< string, pair< long int, int> >& visitedDomain,
 pthread_mutex_t* mutex_visited, vector< string >const& contentTypes, vector< string >const& pageContentTypes){
             this->urls              = urls;
-            this->visitedDomain     = visistedDomain;
-            this->mutex_visisted    = mutex_visited;
+            this->visitedDomain     = visitedDomain;
+            this->mutex_visited    = mutex_visited;
 
             handler                 = new HTTPHandler(contentTypes, pageContentTypes);
             ressourcesSize          = 0;
@@ -15,31 +15,14 @@ pthread_mutex_t* mutex_visited, vector< string >const& contentTypes, vector< str
 
         WebCrawlerSlave::~WebCrawlerSlave(){
             delete handler;
-            delete mutex_visisted;
-            while( ressources.empty() ){
-                delete ressources.front();
-                ressources.pop();
-            }
+            delete mutex_visited;
         }
 
         void WebCrawlerSlave::setNRQS( int n){ nRQS=n; }
-        void WebCrawlerSlave::setPagesSize( int n){ pagesSize=n; }
         void WebCrawlerSlave::setRessourcesSize( int n){ ressourcesSize=n; }
-        void WebCrawlerSlave::setContentTypes( vector<string> t { contentTypes=t; }
-
-        bool WebCrawlerSlave::validHeader(HTTPHeaderReponse& header){
-            if( contentTypes.size() == 0 )
-                return true;
-
-            vector<string>::iterator it = find( contentTypes.begin(), contentTypes.end(), header.getContentType() );
-            if( it!=contentTypes.end() )
-                return true;
-
-            return false;
-        }
 
 
-        void addUrl( list<string>const&  newUrls ){
+        void WebCrawlerSlave::addUrl( list<string>&  newUrls ){
             for(list<string>::iterator it=newUrls.begin(); it!=newUrls.end() ; it++)
                 returnUrls.push_back( *it );
         }
@@ -48,7 +31,7 @@ pthread_mutex_t* mutex_visited, vector< string >const& contentTypes, vector< str
             if( !urls.empty() )
                 return;
 
-            pair<string, bool> url = self->urls.front();
+            pair<string, bool> url = urls.front();
             urls.pop();
 
 //                  if we want to check visisted domains
@@ -56,23 +39,23 @@ pthread_mutex_t* mutex_visited, vector< string >const& contentTypes, vector< str
 //                if( !self->validUrl(url, domain) )
 //                    process( self );
 
-            pair< HTTPHeaderReponse, WebRessource* > content = self->handler->get( url.first );
+            pair< HTTPHeaderReponse, WebRessource > content = handler->get( url.first );
             WebRessource ressource = content.second;
 
-            if ( !validHeader( content.first ) )
+            if ( content.second.empty() )
                 work();
 
+            list<string> newUrls=ressource.collectURL();
+            addUrl( newUrls );
 
-            addUrl( ressource.collectURL() );
-
-            if( sizeof(*ressource) + ressourcesSize > ressourcesMaxSize ){
+            if( sizeof(ressource) + ressourcesSize > ressourcesMaxSize ){
                 ressources.push( ressource );
                 ressourcesSize=0;
                 save();
             }
                 ressources.push( ressource );
-                ressourcesSize+=sizeof(*ressource);
-                process();
+                ressourcesSize+=sizeof(ressource);
+                work();
         }
 
         list< string > WebCrawlerSlave::crawl(){
@@ -82,8 +65,7 @@ pthread_mutex_t* mutex_visited, vector< string >const& contentTypes, vector< str
 
         void WebCrawlerSlave::save(){
             while( !ressources.empty() ){
-                ressources.front().save(......);
-                delete ressources.front();
+                ressourceHandler->save( ressources.front() );
                 ressources.pop();
             }
         }

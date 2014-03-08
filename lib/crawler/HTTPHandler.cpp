@@ -9,7 +9,7 @@ namespace Athena{
             this->userAgent=agent;
         }
         /*
-         * @param : ptr
+         * @param : ptr
          */
 
         size_t HTTPHandler::writeInString ( void *contents, size_t size, size_t nmemb, void *userdata){
@@ -17,7 +17,18 @@ namespace Athena{
             return size * nmemb;
         }
 
-        pair< HTTPHeaderReponse, string > HTTPHandler::get(string const& url){
+        bool HTTPHandler::validHeader(HTTPHeaderReponse& header){
+            if( contentTypes.size() == 0 )
+                return true;
+
+            vector<string>::iterator it = find( contentTypes.begin(), contentTypes.end(), header.getContentType() );
+            if( it!=contentTypes.end() )
+                return true;
+
+            return false;
+        }
+
+        pair< HTTPHeaderReponse, Hephaistos::WebRessource > HTTPHandler::get(string const& url){
             string buffer;
             string headerBuffer;
             HTTPHeaderReponse header;
@@ -41,13 +52,13 @@ namespace Athena{
                 curl_easy_cleanup(session);
             }
 
-            if((CURLE_OK == result) ){
-                header.parse(headerBuffer);
-                return pair< HTTPHeaderReponse, string >( header ,buffer );
+            header.parse(headerBuffer);
+            if((CURLE_OK == result) && validHeader(header)){
+                return pair< HTTPHeaderReponse, WebRessource >( header , WebRessource( (string)url, header.getContentType(), sizeof(buffer), buffer, (unsigned int)time(NULL) ) );
             }else{
                 ofstream logFile( "HTTPHandler.log", ios::app);
                 logFile<<curl_easy_strerror(result)<<"    "<<url<<endl;
-                return pair< HTTPHeaderReponse, string >( header, "");
+                return pair< HTTPHeaderReponse, WebRessource >( header, WebRessource() );
             }
 
         }

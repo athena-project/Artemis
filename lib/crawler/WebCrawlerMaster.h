@@ -17,13 +17,15 @@
 #include <pthread.h>
 
 #include "WebCrawlerSlave.h"
+#include "Hephaistos/Config.h"
 
 using namespace std;
+using namespace Athena::Hephaistos;
 
 namespace Athena{
     namespace Artemis{
 
-        class WebCrawlerMaster{
+        class WebCrawlerMaster : public QObject{
             protected:
                 string ip;
                 int port;
@@ -54,7 +56,9 @@ namespace Athena{
                 WebCrawlerMaster(string confLocation, string ip, int port);
                 ~WebCrawlerMaster();
 
-                void newSlave( void* t );
+                queue< pair<string,bool> > createUrlsBundle();
+
+                static void* newSlave( void* t );
                 void harness();
                 void sendData();
         };
