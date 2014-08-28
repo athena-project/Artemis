@@ -32,35 +32,56 @@ class TcpClient:
 		self.port = p;
 		
 	def __del__(self):
-		sed.deco()
+		self.deco()
+
+	# A surcharger, virtual
+	def getUrls(self, msg):
+		pass
 	
-	def initNetworking(self):
-		self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.connection.connect( self.host, self.port )
+	#Data is a string , for child class
+	def process(self, data):
+		msg = pickle.load( data )
+		assert isinstance(msg, TcpMsg)
 		
+		if msg.type == TcpMsg.T_ACCEPTED:
+			self.connected = True
+		if msg.type == TcpMsg.T_DONE:
+			pass
+		if msg.type == TcpMsg.T_RESEND:
+			self.send( self.lastMsg )
+		if msg.type == TcpMsg.T_URL_TRANSFER:
+			self.getUrls( msg )
+	
+	
+	def initNetworking(self, i=10):
+		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.connect( self.host, self.port )
+		
+		send( TcpMsg( TcpMsg.T_ID ) )
+		if( !self.connected && i!=0 ):
+			self.initNetworking(i-1)
+		
+	def send(self, msg)
 		#Begin co
-		self.lastMsg = TcpMsg( TcpMsg.T_ID ).serialize().encode()
-		self.connection.send( self.lastMsg )
+		self.lastMsg = msg
+		self.sock.send( msg.serialize().encode() )
 		
 		#Waiting for server answer
 		data = ""
 		again = True
 		while again:
-			buffer = self.connection.recv( 4096 )
+			buffer = self.sock.recv( 4096 )
 			data += buffer.decode()
 			if data:
 				again = True
 			else:
 				again = False
 		
-		msg = pickle.load( data )
-		assert isinstance(msg, TcpMsg)
-		if msg.type != TcpMsg.T_ACCEPTED:
-			raise "bad type msg"
+		self.process( data )
 		
-		#End co
-		self.lastMsg = TcpMsg( TcpMsg.T_DONE ).serialize().encode()
-		self.connection.send( self.lastMsg )
+		#End 
+		self.sock.send( TcpMsg( TcpMsg.T_DONE ).serialize().encode() )
+	
 		
 	def deco(self):
 		self.lastMsg = TcpMsg( TcpMsg.T_DECO ).serialize().encode()

@@ -4,14 +4,14 @@ class TcpMsg:
 	"""
 	
 		Const : 
-			T_ACCEPTED 		identification accepted 		( server )
-			T_DECO 			deco 							( slave )
-			T_DONE 			end of the current transaction	( both )
-			T_ID			connection request				( slave )
-			T_PENDING  		pending to work					( slave )
-			T_PROCESSING	processing the current task		( slave )
-			T_RESEND		last msg request				( both )
-			T_URL_TRANSFER									( both )
+			T_ACCEPTED 		identification accepted 		( send by server )
+			T_DECO 			deco 							( send by slave )
+			T_DONE 			end of the current transaction	( send by both )
+			T_ID			connection request				( send by slave )
+			T_PENDING  		pending to work					( send by slave )
+			T_PROCESSING	processing the current task		( send by slave )
+			T_RESEND		last msg request				( send by both )
+			T_URL_TRANSFER									( send by both )
 	
 	"""
 	T_ACCEPTED 		= 1
