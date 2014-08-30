@@ -19,7 +19,7 @@
 import socket
 import pickle
 import select
-import TcpMsg.py
+from TcpMsg import TcpMsg
 
 class TcpServer:
 	"""
@@ -27,21 +27,23 @@ class TcpServer:
 	"""
 	
 	def __init__(self, p):
+		self.sock = None
 		self.clientsConnected = []
 		self.clientsAvailable = []
 		self.port = p
-		self.host = socket.gethostname()
+		self.host = ''#socket.gethostname()
 		
 	def __del__(self):
 		for client in self.clientsConnected:
 			client.close()
-
-		sock.close()	
+		
+		if( self.sock != None):
+			self.sock.close()	
 	
 	def initNetworking(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.sock.bind( self.host, self.port )
-		selt.sock.listen( 15 )
+		self.sock.bind( (self.host, self.port) )
+		self.sock.listen( 5 )
 		
 	# A surcharger, virtual
 	def getUrls(self, msg):
@@ -57,22 +59,19 @@ class TcpServer:
 			self.clientConnected.pop( [i] )
 		if msg.type == Tcp.T_ID:
 			self.send( TcpMsg( TcpMsg.T_ACCEPTED ), self.ready_to_write[i] )
-		if msg.type == TcpMsg.T_PENDING && self.clientAvailable.count(i) == 0:
+		if msg.type == TcpMsg.T_PENDING & self.clientAvailable.count(i) == 0:
 			self.clientsAvailable.append( i )
 		if msg.type == TcpMsg.T_PROCESSING:
 			self.clientsAvailable.remove( i )
 		if msg.type == TcpMsg.T_URL_TRANSFER:
 			self.getUrls(msg)
 	
-	def send(self, tmpSock, msg)
+	def send(self, tmpSock, msg):
 		self.tmpSock.send( msg.serialize().encode() )
 		
-	
-	
-	
 	def listen(self):
 		while True :
-			connectionRequested, wlist, xlist = select.select([sock],[], [], 60)
+			connectionRequested, wlist, xlist = select.select([self.sock],[], [], 60)
 			
 			for connexion in connectionRequested:
 				connexion_avec_client, infos_connexion = connexion.accept()
@@ -98,7 +97,7 @@ class TcpServer:
 						else:
 							again = False
 					self.process( data, i )
-					i++
+					i+=1
 					
 		
 		

@@ -18,7 +18,7 @@
 
 import socket
 import pickle
-import TcpMsg.py
+from TcpMsg import TcpMsg
 
 class TcpClient:
 	"""
@@ -26,9 +26,9 @@ class TcpClient:
 	"""
 	
 	def __init__(self, h, p):
-		self.lastMsg = 0;
+		self.lastMsg = None;
 		self.connected = False ;
-		self.host = host;
+		self.host = h;
 		self.port = p;
 		
 	def __del__(self):
@@ -48,20 +48,20 @@ class TcpClient:
 		if msg.type == TcpMsg.T_DONE:
 			pass
 		if msg.type == TcpMsg.T_RESEND:
-			self.send( self.lastMsg )
+			self.send( self.lastMsg ) 
 		if msg.type == TcpMsg.T_URL_TRANSFER:
 			self.getUrls( msg )
 	
 	
 	def initNetworking(self, i=10):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.sock.connect( self.host, self.port )
+		self.sock.connect( (self.host, self.port) )
 		
 		send( TcpMsg( TcpMsg.T_ID ) )
-		if( !self.connected && i!=0 ):
+		if( self.connected == False & i!=0 ):
 			self.initNetworking(i-1)
 		
-	def send(self, msg)
+	def send(self, msg):
 		#Begin co
 		self.lastMsg = msg
 		self.sock.send( msg.serialize().encode() )
@@ -85,6 +85,6 @@ class TcpClient:
 		
 	def deco(self):
 		self.lastMsg = TcpMsg( TcpMsg.T_DECO ).serialize().encode()
-		self.connection.send( self.lastMsg )
-		self.connection.close()
+		self.sock.send( self.lastMsg )
+		self.sock.close()
 	
