@@ -16,11 +16,13 @@
 #	@autor Severus21
 #
 
+from Ressource import Ressource
 import SQLFactory
 import peewee
 from peewee import *
+import hashlib
 
-class RessourceRecord( Model ):
+class TextRecord( Model ):
 	"""
 	"""
 	id = peewee.PrimaryKeyField()
@@ -33,80 +35,33 @@ class RessourceRecord( Model ):
 	md5 = peewee.TextField()
 	chunks = peewee.TextField()
 	lastUpdate = peewee.DateTimeField( default=datetime.datetime.now ) 
+	
+	revision = peewee.TextField()
 
 	
 	class Meta:
         database = db
 
 
-class Ressource( Model ):
+class Text( Ressource ):
 	"""
 	"""
+	
 	def __init__(self):
-		self.id = -1
-		self.url = ""
-		self.domain = ""
-		self.relatedRessources = [] # [(type, id)]
+		Ressource.__init__(self)
+		self.revision = 0 #number of revision
+
+	def newRev(self):
+		if( hashlib.md5(self.data).hexdigest() == self.md5[ self.md5.count()-1 ] ):
+			pass
+		else
+			#newrev c++
 		
-		self.sizes = []
-		self.contentTypes = []
-		self.times = []
-		self.md5 = []
-		
-		self.chunks = []
-		self.lastUpdate = 0
-		
-		self.data = ""
-		
-	def serializeSimpleList(self, l):
-		s = ""
-		for x in l:
-			s+=str(x)+":"
-		return s[0:len(s)-1]
-		
-	def unserialiseSimpleList(self, s):
-		l  = []
-		begin=0
-		end=0
-		i=0
-		n=len(s)
-		while i<s :
-			if( s[i] == ":" ):
-				end = i-1
-				l.append( s[begin, end])
-				begin = i+1
-			i+=1
-		return l
-		
-	def serializeTupleList(self, l):
-		s = ""
-		for (a,b) in l:
-			s+=str(a)+"|"+str(b)+":"
-		return s[0:len(s)-1]
-		
-	def unserializeTuple(self, s):
-		find = False
-		i=0
-		n=len(s)
-		while( i<s && find == False):
-			if( s[i] == "|"):
-				find=True
-			i+=1
-		
-		a = s[0:i-2]
-		b = s[i:]
-		return(a,b)
-		
-	def unserializeTupleList(self, s):
-		l  = []
-		tmpL = self.unserialiseSimpleList(s)
-		for x in tmpL:
-			l.append( self.unserializeTuple( x )
-		return l
-		
+
 	def save(self):
 		exits = False
 		
+		newRev()
 		if( self.id == -1):
 			try:
 				RessourceRecord.get( RessourceRecord.url = self.url )
@@ -127,18 +82,21 @@ class Ressource( Model ):
 								 times				= self.serializeSimpleList(self.times),
 								 md5				= self.serializeSimpleList(self.md5),
 								 chunks				= self.serializeSimpleList(self.chunks),
-								 lastUpdate			= self.lastUpdate
+								 lastUpdate			= self.lastUpdate,
+								 revision			= self.revision
 								)
 		else:
 			record = RessourceRecord(url			= self.url,
 								 domain				= self.domain,
-								 relatedRessources	= self.serializeSimpleList(self.relatedRessources),
+								 relatedRessources	= self.serializeTupleList(self.relatedRessources),
 								 sizes				= self.serializeSimpleList(self.sizes),
 								 contentTypes		= self.serializeSimpleList(self.contentTypes),
 								 times				= self.serializeSimpleList(self.times),
 								 md5				= self.serializeSimpleList(self.md5),
-								 chunks				= self.serializeSimpleList(self.chunks),
-								 lastUpdate			= self.lastUpdate
+								 chunks				= self.chunks,
+								 lastUpdate			= self.lastUpdate,
+								 revision			= self.revision
 								)
 		record.save()
+
 		
