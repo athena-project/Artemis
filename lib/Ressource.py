@@ -64,7 +64,7 @@ class Ressource( Model ):
 			s+=str(x)+":"
 		return s[0:len(s)-1]
 		
-	def unserialiseSimpleList(self, s):
+	def unserialiseSimpleList(self, s, f):
 		l  = []
 		begin=0
 		end=0
@@ -73,7 +73,7 @@ class Ressource( Model ):
 		while i<s :
 			if( s[i] == ":" ):
 				end = i-1
-				l.append( s[begin, end])
+				l.append( f(s[begin, end]) )
 				begin = i+1
 			i+=1
 		return l
@@ -84,7 +84,7 @@ class Ressource( Model ):
 			s+=str(a)+"|"+str(b)+":"
 		return s[0:len(s)-1]
 		
-	def unserializeTuple(self, s):
+	def unserializeTuple(self, s, f1, f2):
 		find = False
 		i=0
 		n=len(s)
@@ -95,13 +95,13 @@ class Ressource( Model ):
 		
 		a = s[0:i-2]
 		b = s[i:]
-		return(a,b)
+		return( f1(a),f2(b) )
 		
-	def unserializeTupleList(self, s):
+	def unserializeTupleList(self, s, f1, f2):
 		l  = []
 		tmpL = self.unserialiseSimpleList(s)
 		for x in tmpL:
-			l.append( self.unserializeTuple( x )
+			l.append( self.unserializeTuple( x , f1, f2) )
 		return l
 		
 	def save(self):
@@ -121,23 +121,23 @@ class Ressource( Model ):
 			record = RessourceRecord( id			= self.id,	
 								 url				= self.url,
 								 domain				= self.domain,
-								 relatedRessources	= self.serializeTupleList(self.relatedRessources),
-								 sizes				= self.serializeSimpleList(self.sizes),
-								 contentTypes		= self.serializeSimpleList(self.contentTypes),
-								 times				= self.serializeSimpleList(self.times),
-								 md5				= self.serializeSimpleList(self.md5),
-								 chunks				= self.serializeSimpleList(self.chunks),
+								 relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
+								 sizes				= self.serializeSimpleList(self.sizes, int),
+								 contentTypes		= self.serializeSimpleList(self.contentTypes, str),
+								 times				= self.serializeSimpleList(self.times, int),
+								 md5				= self.serializeSimpleList(self.md5, str),
+								 chunks				= self.serializeSimpleList(self.chunks, int),
 								 lastUpdate			= self.lastUpdate
 								)
 		else:
 			record = RessourceRecord(url			= self.url,
 								 domain				= self.domain,
-								 relatedRessources	= self.serializeSimpleList(self.relatedRessources),
-								 sizes				= self.serializeSimpleList(self.sizes),
-								 contentTypes		= self.serializeSimpleList(self.contentTypes),
-								 times				= self.serializeSimpleList(self.times),
-								 md5				= self.serializeSimpleList(self.md5),
-								 chunks				= self.serializeSimpleList(self.chunks),
+								 relatedRessources	= self.serializeSimpleList(self.relatedRessources, str, int),
+								 sizes				= self.serializeSimpleList(self.sizes, int),
+								 contentTypes		= self.serializeSimpleList(self.contentTypes, str),
+								 times				= self.serializeSimpleList(self.times, int),
+								 md5				= self.serializeSimpleList(self.md5, str),
+								 chunks				= self.serializeSimpleList(self.chunks, int),
 								 lastUpdate			= self.lastUpdate
 								)
 		record.save()

@@ -41,11 +41,11 @@ class HTMLParser( html.parser ):
 		for (name,value) in attrs :
 			if(name == 'href' | name =='download' | name== 'src'):
 				url = value
-			else if name == 'alt':
+			if name == 'alt':
 				alt = value
-			else if name == 'charset':
+			if name == 'charset':
 				charset = value
-			else if name == 'type':
+			if name == 'type':
 				ctype = value
 				
 		t2 = urlparse( url )

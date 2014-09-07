@@ -56,7 +56,7 @@ class TcpServer:
 			pass
 		if msg.type == TcpMsg.T_DECO:
 			client.close()
-			self.clientConnected.pop( [i] )
+			self.clientsConnected.pop( i )
 		if msg.type == Tcp.T_ID:
 			self.send( TcpMsg( TcpMsg.T_ACCEPTED ), self.ready_to_write[i] )
 		if msg.type == TcpMsg.T_PENDING & self.clientAvailable.count(i) == 0:
@@ -76,7 +76,7 @@ class TcpServer:
 			for connexion in connectionRequested:
 				connexion_avec_client, infos_connexion = connexion.accept()
 				# On ajoute le socket connecté à la liste des clients
-				slef.clientsConnected.append(connexion_avec_client)
+				self.clientsConnected.append(connexion_avec_client)
 				
 			ready_to_read = []
 			try:
@@ -88,15 +88,18 @@ class TcpServer:
 				# On parcourt la liste des clients à lire
 				for client in self.ready_to_read:
 					data = ""
-					again = True
-					while again:
-						buffer = self.connection.recv( 4096 )
+					buffer = client.recv( 18 )
+					j, size= 0, TcpMsg.getSize( buffer.decode() )
+					#if not len( buffer ):	
+					#	client.close()
+					#	self.clientsConnected.pop( i )
+						
+					while j<size:
+						buffer = client.recv( 4096 )
 						data += buffer.decode()
-						if data:
-							again = True
-						else:
-							again = False
-					self.process( data, i )
+						j+=4096
+					print( buffer)
+					#self.process( data, i )
 					i+=1
 					
 		

@@ -16,14 +16,11 @@
 #	@autor Severus21
 #
 
-import urllib.request
-
-
-g=urllib.request.urlopen( "http://fr.wikipedia.org/wiki/Wikip%C3%A9dia:Accueil_principal")
-
-for (a,b) in g.getheaders():
-	print(a)
-	print(b)
-	print("\n")
-
-print( g.read() )
+import TcpClient
+import time
+t =TcpClient.TcpClient( "", 1645 )
+t.initNetworking()
+s = str("8troll1")
+t.send( s )
+time.sleep( 1 )
+t.send( "avemois" )

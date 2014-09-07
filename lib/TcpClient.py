@@ -17,7 +17,7 @@
 #
 
 import socket
-import pickle
+import time
 from TcpMsg import TcpMsg
 
 class TcpClient:
@@ -26,13 +26,17 @@ class TcpClient:
 	"""
 	
 	def __init__(self, h, p):
+		self.sock = None
 		self.lastMsg = None;
 		self.connected = False ;
 		self.host = h;
 		self.port = p;
 		
+		
 	def __del__(self):
-		self.deco()
+		if( self.sock != None):
+			self.sock.send( TcpMsg.T_DECO.encode() )
+			self.sock.close()
 
 	# A surcharger, virtual
 	def getUrls(self, msg):
@@ -57,34 +61,17 @@ class TcpClient:
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect( (self.host, self.port) )
 		
-		send( TcpMsg( TcpMsg.T_ID ) )
+		self.sock.send( TcpMsg.T_ID.encode() )
 		if( self.connected == False & i!=0 ):
 			self.initNetworking(i-1)
 		
 	def send(self, msg):
 		#Begin co
 		self.lastMsg = msg
-		self.sock.send( msg.serialize().encode() )
+		print( msg.encode() )
+		self.sock.send( msg.encode() )
 		
-		#Waiting for server answer
-		data = ""
-		again = True
-		while again:
-			buffer = self.sock.recv( 4096 )
-			data += buffer.decode()
-			if data:
-				again = True
-			else:
-				again = False
-		
-		self.process( data )
+		time.sleep( 0.5 )
 		
 		#End 
-		self.sock.send( TcpMsg( TcpMsg.T_DONE ).serialize().encode() )
-	
-		
-	def deco(self):
-		self.lastMsg = TcpMsg( TcpMsg.T_DECO ).serialize().encode()
-		self.sock.send( self.lastMsg )
-		self.sock.close()
-	
+		#self.sock.send(  TcpMsg.T_DONE.encode() )
