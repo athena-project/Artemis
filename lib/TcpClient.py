@@ -34,9 +34,10 @@ class TcpClient:
 		
 		
 	def __del__(self):
-		if( self.sock != None):
-			self.sock.send( TcpMsg.T_DECO.encode() )
-			self.sock.close()
+		pass
+		#self.initNetworking()
+		#self.sock.send( TcpMsg.T_DECO.encode() )
+		#self.sock.close()
 
 	# A surcharger, virtual
 	def getUrls(self, msg):
@@ -57,21 +58,18 @@ class TcpClient:
 			self.getUrls( msg )
 	
 	
-	def initNetworking(self, i=10):
+	def initNetworking(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect( (self.host, self.port) )
 		
-		self.sock.send( TcpMsg.T_ID.encode() )
-		if( self.connected == False & i!=0 ):
-			self.initNetworking(i-1)
-		
 	def send(self, msg):
-		#Begin co
+		#Begin 
+		self.initNetworking()
 		self.lastMsg = msg
-		print( msg.encode() )
-		self.sock.send( msg.encode() )
-		
-		time.sleep( 0.5 )
+		self.sock.sendall( msg.encode() )
+		self.sock.close()
 		
 		#End 
-		#self.sock.send(  TcpMsg.T_DONE.encode() )
+		self.initNetworking()
+		self.sock.send(  TcpMsg.T_DONE.encode() )
+		self.sock.close()

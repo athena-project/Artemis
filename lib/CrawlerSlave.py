@@ -16,7 +16,36 @@
 #	@autor Severus21
 #
 
-import TcpClient
-import time
-t =TcpClient.TcpClient( "", 1645 )
+from TcpServer import TcpServer
+from TcpClient import TcpClient
 
+class CrawlerSlave( TcpServer ):
+	"""
+	"""
+	
+	
+	def __init(self ) :
+	
+	### Network ###
+	
+	def process(self, data, address):
+		if msg.type == TcpMsg.T_DONE:
+			pass
+			
+		if msg.type == TcpMsg.T_DECO:
+			self.slavesAvailable.remove( address )
+			
+		if msg.type == Tcp.T_ID & self.clientAvailable.count(address) == 0:
+			self.append.remove( address )
+			t = TcpClient.TcpClient( "", 1646 )
+			t.send( TcpMsg.T_ACCEPTED )
+			
+		if msg.type == TcpMsg.T_PENDING & self.clientAvailable.count(address) == 0:
+			self.clientsAvailable.append( i )
+			
+		if msg.type == TcpMsg.T_PROCESSING:
+			self.
+			self.slavesAvailable.remove( address )
+			
+		if msg.type == TcpMsg.T_URL_TRANSFER:
+			self.

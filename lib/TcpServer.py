@@ -17,7 +17,6 @@
 #
 
 import socket
-import pickle
 import select
 from TcpMsg import TcpMsg
 
@@ -29,46 +28,22 @@ class TcpServer:
 	def __init__(self, p):
 		self.sock = None
 		self.clientsConnected = []
-		self.clientsAvailable = []
 		self.port = p
 		self.host = ''#socket.gethostname()
 		
 	def __del__(self):
 		for client in self.clientsConnected:
 			client.close()
-		
-		if( self.sock != None):
-			self.sock.close()	
 	
 	def initNetworking(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.bind( (self.host, self.port) )
-		self.sock.listen( 5 )
-		
-	# A surcharger, virtual
-	def getUrls(self, msg):
-		pass	
+		self.sock.listen( 5 )	
 	
-	#Data is a string , for child class
-	def process(self, data, i):
-		msg = pickle.load( data )
-		if msg.type == TcpMsg.T_DONE:
-			pass
-		if msg.type == TcpMsg.T_DECO:
-			client.close()
-			self.clientsConnected.pop( i )
-		if msg.type == Tcp.T_ID:
-			self.send( TcpMsg( TcpMsg.T_ACCEPTED ), self.ready_to_write[i] )
-		if msg.type == TcpMsg.T_PENDING & self.clientAvailable.count(i) == 0:
-			self.clientsAvailable.append( i )
-		if msg.type == TcpMsg.T_PROCESSING:
-			self.clientsAvailable.remove( i )
-		if msg.type == TcpMsg.T_URL_TRANSFER:
-			self.getUrls(msg)
-	
-	def send(self, tmpSock, msg):
-		self.tmpSock.send( msg.serialize().encode() )
-		
+	#Data is a string
+	def process(self, data, address):
+		pass
+
 	def listen(self):
 		while True :
 			connectionRequested, wlist, xlist = select.select([self.sock],[], [], 60)
@@ -78,7 +53,7 @@ class TcpServer:
 				# On ajoute le socket connecté à la liste des clients
 				self.clientsConnected.append(connexion_avec_client)
 				
-			ready_to_read = []
+			self.ready_to_read, self.ready_to_write, self.in_error = [], [], []
 			try:
 				self.ready_to_read, self.ready_to_write, self.in_error = select.select( self.clientsConnected, [], [], 60)
 			except select.error:
@@ -87,20 +62,19 @@ class TcpServer:
 				i = 0
 				# On parcourt la liste des clients à lire
 				for client in self.ready_to_read:
-					data = ""
-					buffer = client.recv( 18 )
-					j, size= 0, TcpMsg.getSize( buffer.decode() )
-					#if not len( buffer ):	
-					#	client.close()
-					#	self.clientsConnected.pop( i )
+					buffer = client.recv( 4096 )
+					data = buffer.decode()
+					j, size= 4096, TcpMsg.getSize( data )
+					
+					if not len( buffer ):	
+						client.close()
+						if( len(self.clientsConnected) > 0 ):
+							self.clientsConnected.pop( i )
 						
 					while j<size:
 						buffer = client.recv( 4096 )
 						data += buffer.decode()
 						j+=4096
-					print( buffer)
-					#self.process( data, i )
-					i+=1
 					
-		
-		
+					self.process( data, client.getpeername() )
+					i+=1
