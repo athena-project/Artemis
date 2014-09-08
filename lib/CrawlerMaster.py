@@ -24,8 +24,21 @@ class CrawlerMaster( TcpServer ):
 	"""
 	
 	
-	def __init(self ) :
-		self.slavesAvailable = []
+	def __init__(self, contentTypes=[], maxRamUrls=100, maxMemUrls=1000, urlsPerSlave=10 ) :
+		"""
+			@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
+			@param maxRamUrls		- maximun of urls kept in ram
+			@param maxMemUrls		- maximun of urls kept in memcached
+			@param urlsPerSlave		- 
+		"""
+		self.contentTypes 		= contentTypes
+		self.maxRamUrls			= maxRamUrls
+		self.maxMemUrls			= maxMemUrls
+		self.urlsPerSlave		= urlsPerSlave
+		
+		self.slavesAvailable 	= [] # [address_ip1, address_ip2..]
+		self.url  			 	= []
+		
 	
 	### Network ###
 	
