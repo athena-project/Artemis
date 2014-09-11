@@ -18,6 +18,8 @@
 
 from TcpServer import TcpServer
 from TcpClient import TcpClient
+import UrlCacheHandler
+import RobotCacheHandler
 
 class CrawlerMaster( TcpServer ):
 	"""
@@ -34,21 +36,14 @@ class CrawlerMaster( TcpServer ):
 			@param urlsPerSlave		- 
 		"""
 		self.contentTypes 		= contentTypes
-		self.maxRamUrls			= maxRamUrls
-		self.maxMemUrls			= maxMemUrls
-		self.maxRamRobots		= maxRamRobots
-		self.urlsPerSlave		= urlsPerSlave
-		
-		self.idUrlCache			= 0
+		self.maxSizeSlave		= maxSizeSlave # size max by msg
 		
 		self.slavesAvailable 	= [] # [address_ip1, address_ip2..]
-		self.robots				= {} # robots[domain]=RobotObj cf urlib
 		
-		self.url  			 	= []
-		
+		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler()
+		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 	
 	### Network ###
-	
 	def process(self, data, address):
 		if msg.type == TcpMsg.T_DONE:
 			pass
@@ -69,8 +64,38 @@ class CrawlerMaster( TcpServer ):
 			self.slavesAvailable.remove( address )
 			
 		if msg.type == TcpMsg.T_URL_TRANSFER:
-			self.
+			self.addUrls( data )
 	
 	
-	### ###
-	def addUrl( url ):
+	### Url Handling ###
+	def validUrl(self, url):
+		  
+		  
+	def addUrls(self, urls ):
+		for url in urls :
+			self.urlCacheHandler.add( url ) if self.validUrl( url ) else pass
+	
+	def makeBundle(self):
+		bundle = ""
+		urlSize = self.urlCacheHandler.currentRamSize + self.urlCacheHandler.currentMemSize
+		i,n = 0,0
+		
+		if urlSize < self.slavesAvailable * self.maxSizeSlave :
+			n = urlSize % self.slavesAvailable + 1 
+		else
+			n = self.maxSizeSlave
+		
+		while i<n:
+			tmp = self.urlCacheHandler.get()
+			if tmp.size + i >= n:
+				while i<n:
+					bundle+=" " 
+					i+=1
+					
+			tmp	= Url.serialize( tmp )+":" 
+			i	+=tmp.size()
+			bundle+=tmp
+		
+		return bundle
+		
+	
