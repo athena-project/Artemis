@@ -24,19 +24,26 @@ class CrawlerMaster( TcpServer ):
 	"""
 	
 	
-	def __init__(self, contentTypes=[], maxRamUrls=100, maxMemUrls=1000, urlsPerSlave=10 ) :
+	def __init__(self, contentTypes=[], maxRamUrls=100, maxMemUrls=1000, urlsPerSlave=10, maxRamRobots=100) :
 		"""
 			@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
 			@param maxRamUrls		- maximun of urls kept in ram
-			@param maxMemUrls		- maximun of urls kept in memcached
+			@param maxMemUrls		- maximun of urls kept in disk cache
+			@param maxRamRobots		- maximun of robot.txt kept in ram
+			@param maxMemRobots		- maximun of robot.txt ept in disk cache
 			@param urlsPerSlave		- 
 		"""
 		self.contentTypes 		= contentTypes
 		self.maxRamUrls			= maxRamUrls
 		self.maxMemUrls			= maxMemUrls
+		self.maxRamRobots		= maxRamRobots
 		self.urlsPerSlave		= urlsPerSlave
 		
+		self.idUrlCache			= 0
+		
 		self.slavesAvailable 	= [] # [address_ip1, address_ip2..]
+		self.robots				= {} # robots[domain]=RobotObj cf urlib
+		
 		self.url  			 	= []
 		
 	
@@ -63,3 +70,7 @@ class CrawlerMaster( TcpServer ):
 			
 		if msg.type == TcpMsg.T_URL_TRANSFER:
 			self.
+	
+	
+	### ###
+	def addUrl( url ):
