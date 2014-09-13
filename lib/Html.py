@@ -16,6 +16,7 @@
 #	@autor Severus21
 #
 
+import Url
 from Text import Text
 import html.parser 
 from urllib.parse import urlparse
@@ -26,7 +27,7 @@ class HTMLParser( html.parser ):
 	"""
 	def __init__(self):
 		html.parser.__init__(self, p)
-		self.relatedRessources = {'a':[], 'img':[], 'link':[], 'script':[], 'source':[]} #balise name=>link
+		self.relatedRessources = []
 		self.urlObj = urlparse(p)
 		
 	def handle_starttag(self, tag, attrs):
@@ -56,8 +57,9 @@ class HTMLParser( html.parser ):
 			else:
 				url = self.urlObj.scheme+"://"+url
 			
-		tmp = { 'url':url, 'alt':alt, 'charset':charset, 'type':ctype }
-		self.relatedRessources[tag].append( tmp )
+
+		tmp = Url(tag, url, ctype, charset, alt)
+		self.relatedRessources.append( tmp )
 
 class Html( Text ):
 	"""

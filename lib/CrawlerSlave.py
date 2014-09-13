@@ -24,10 +24,18 @@ class CrawlerSlave( TcpServer ):
 	"""
 	
 	
-	def __init(self ) :
-	
+	def __init(self, maxThreads=2, threadUrls=100 ) :
+		self.maxThreads 	= maxThreads
+		self.threadUrls		= threadUrls
+		self.numberThreads  = 0
+		
+		self.urls			= []
+		self.newUrls		= []
+		
+		self.threads		= []
+		self.aliveThreads 	= 0
+		
 	### Network ###
-	
 	def process(self, data, address):
 		if msg.type == TcpMsg.T_DONE:
 			pass
@@ -49,3 +57,25 @@ class CrawlerSlave( TcpServer ):
 			
 		if msg.type == TcpMsg.T_URL_TRANSFER:
 			self.
+	
+	### CrawlerThread handling ###
+	
+	def harness(self):
+		if self.urls == 0:
+			on demande de nouveau truc 
+			
+		n = self.maxThreads-self.aliveThreads
+		if n>0 :
+			i,m = 0, min( len( self.urls ) // n + 1, self.threadUrls)
+			while i<n :
+				j,l=0,[]
+				while j<m:
+					l.append( self.urls.pop() )
+					j+=1
+					
+				self.threads.append( CrawlerSlave( l ) )
+				self.aliveThreads += 1
+				self.threads[ self.aliveThreads-1 ].start()
+				i+=1
+			
+			

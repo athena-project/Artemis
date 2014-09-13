@@ -16,46 +16,62 @@
 #	@autor Severus21
 #
 
+class UrlRecord
+from peewee import *
+
+class UrlRecord( Model ):
+	
+	id 				= peewee.PrimaryKeyField()
+	protocol		= peewee.TextField()
+	domain 			= peewee.TextField()
+	url 			= peewee.TextField()
+	lastMd5			= peewee.TextField()
+	lastVisited 	= peewee.TimeField()
+	relatedRessource= peewee.TextField() #type(link to an sql table):id
+
 class Url:
-	def __init__(self, url, t, charset, alt):
-		self.url=url
-		self.type = t
-		self.charset = charset
-		self.alt =alt
+	def __init__(self,o , url, t, charset, alt):
+		self.origin 	= o
+		self.url		= url
+		self.type 		= t
+		self.charset 	= charset
+		self.alt 		= alt
 		
 	def serialize(self):
-		return self.url+"|"+self.type+"|"+self.charset+"|"+self.alt
+		return self.origin+"|"+self.url+"|"+self.type+"|"+self.charset+"|"+self.alt
 		
 	def serializeList( l):
 		buf = ""
 		for url in l:
-			buff+=url.serialize()
+			buff+=url.serialize()+"~"
 		return buf
 			
 	def unserialize( s):
-		url,type,charset,alt="","","",""
+		origin, url, type, charset, alt= "", "", "", "", ""
 		i,j,k,n=0,0,0, len(n)
 		while i<n:
 			if s[j] == "|":
 				if k==0:
-					url	= s[i:j]
+					origin	= s[i:j]
 				if k==1:
-					type	=s[i:j]
+					url	= s[i:j]
 				if k==2:
-					charset=s[i:j]
+					type	=s[i:j]
 				if k==3:
+					charset=s[i:j]
+				if k==4:
 					alt	=s[i:j]
 					
 				i,j,k=j,j+1,k+1
 			else:
 				j+=1
-		return Url( url, type, charset, alt)
+		return Url( origin, url, type, charset, alt)
 	
 	def unserializeList( s ):
 		l = []
 		i,j,n=0,0,0, len(n)
 		while i<n:
-			if s[j] == ":":
+			if s[j] == "~":
 				l.append( unserialize( s[i:j] ) )
 				i,j=j,j+1
 			else:

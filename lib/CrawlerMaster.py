@@ -15,7 +15,7 @@
 #  
 #	@autor Severus21
 #
-
+from urllib.parse import urlparse
 from TcpServer import TcpServer
 from TcpClient import TcpClient
 import UrlCacheHandler
@@ -26,16 +26,19 @@ class CrawlerMaster( TcpServer ):
 	"""
 	
 	
-	def __init__(self, contentTypes=[], maxRamUrls=100, maxMemUrls=1000, urlsPerSlave=10, maxRamRobots=100) :
+	def __init__(self, useragent="*", contentTypes=[], domainRules={"*":True}, protocolRules={"*":True}, sourceRules={"*":True} urlsPerSlave=10) :
 		"""
 			@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
-			@param maxRamUrls		- maximun of urls kept in ram
-			@param maxMemUrls		- maximun of urls kept in disk cache
-			@param maxRamRobots		- maximun of robot.txt kept in ram
+			@domainRules			- domain => true ie allowed False forbiden *=>all
 			@param maxMemRobots		- maximun of robot.txt ept in disk cache
 			@param urlsPerSlave		- 
 		"""
+		self.useragent 			= useragent
+		
 		self.contentTypes 		= contentTypes
+		self.domainRules		= domainRules
+		self.protocolRules		= protocolRules
+		self.sourceRules		= sourceRules
 		self.maxSizeSlave		= maxSizeSlave # size max by msg
 		
 		self.slavesAvailable 	= [] # [address_ip1, address_ip2..]
@@ -60,7 +63,6 @@ class CrawlerMaster( TcpServer ):
 			self.clientsAvailable.append( i )
 			
 		if msg.type == TcpMsg.T_PROCESSING:
-			self.
 			self.slavesAvailable.remove( address )
 			
 		if msg.type == TcpMsg.T_URL_TRANSFER:
@@ -69,8 +71,47 @@ class CrawlerMaster( TcpServer ):
 	
 	### Url Handling ###
 	def validUrl(self, url):
-		  
-		  
+		#Check in ram
+		if( self.urlCacheHandler.exists( url ) )
+			return False
+		
+		#Chek source
+		if url.source in self.sourceRules:
+			if !self.sourceRules[urlP.source]:
+				return False
+		else:
+			return False
+			
+		#Check domain and protocol
+		urlP = urlparse( url.url )
+		
+		if urlP.sheme in self.protocolRules:
+		  if !self.protocolRules[urlP.sheme]:
+			  False
+		else :
+			if !self.protocolRules["*"]:
+				return False
+		
+		if urlP.netloc in self.domainRules:
+		  if !self.domainRules[urlP.netloc]:
+			  False
+		else :
+			if !self.domainRules["*"]:
+				return False
+		
+		#Robot check
+		robot = self.robotCacheHandler.get( url )
+		if !robot.can_fetch(self.useragent , url.url):
+			return False
+			
+		#Sql check
+		try:
+			UrlRecord.get( UrlRecord.url == elmt.url )
+		except peewee.UrlRecordDoesNotExists:
+			return False
+			
+		return True
+			
 	def addUrls(self, urls ):
 		for url in urls :
 			self.urlCacheHandler.add( url ) if self.validUrl( url ) else pass
@@ -92,7 +133,7 @@ class CrawlerMaster( TcpServer ):
 					bundle+=" " 
 					i+=1
 					
-			tmp	= Url.serialize( tmp )+":" 
+			tmp	= Url.serialize( tmp )+"~" 
 			i	+=tmp.size()
 			bundle+=tmp
 		
