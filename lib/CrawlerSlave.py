@@ -16,66 +16,162 @@
 #	@autor Severus21
 #
 
+from urllib.request as request
+from urllib.parse import urlparse
+from threading import Thread, RLock
+import Url
 from TcpServer import TcpServer
 from TcpClient import TcpClient
 
-class CrawlerSlave( TcpServer ):
-	"""
-	"""
+
+class WorkerThread( Thread ):
+	def __init(self, urls, newUrls, contentTypeRules)
+		"""
+			contentTypeRules		- contentType => Ressource type
+		"""
+		Thread.__init__(self)
+		
+		self.contentTypeRules	= contentTypeRules
+		self.urls				= urls
+		self.newUrls			= newUrls 
 	
 	
-	def __init(self, maxThreads=2, threadUrls=100 ) :
+	def run(self):
+		while True:
+			with urlsLock:
+				if not self.urls :
+					return None
+				url = self.urls.pop()
+			
+			data = dispatch(url)
+			#Analyse data underway a faire 
+	
+	### Network handling ###
+	def dispatch(self, url):
+		urlObject = urlparse( url )	
+		if( urlObject.scheme == "http" or urlObject.scheme == "https"):
+			self.http( url )
+		else if( urlObject.scheme == "ftp" or urlObject.scheme == "ftps"):
+			self.ftp( url )
+		else :
+			#log
+			
+	def http( self, url ):
+		r = request.urlopen( url)	
+		if( r.status == 200 ):
+			
+		else:
+			#log
+	
+	def ftp( self, url):
+		r = request.urlopen( url)	
+		if( r.status == 200 ):
+			
+		else:
+			#log
+			
+			
+class OverseerThread( Thread ):
+	def __init__(self, useragent, cPort, maxThreads, period, urls)):
+		Thread.__init__(self)
+		self.useragent		= useragent
+		self.cPort			= cPort
+		
+		self.period			= period
+		self.maxWorkers 	= maxThreads
+		
+		self.workers 	= []
+		self.aliveWorkers 	= 0
+		
+		self.newUrls		= []
+		self.urls			= urls
+		
+	def pruneWorkers(self):
+		for worker in self.workers:
+			if !worker.is_alive():
+				self.aliveWorkers -=1
+				del worker
+
+	def makeBundleFromList(self, l):
+		bundle = ""
+		urlSize = 0
+		for url in l:
+			urlSize += url.size()
+		i,n = 0, min( TcpMsg.T_URL_TRANSFER_SIZE, urlSize)
+		 
+		while i<n :
+			tmp = urls.pop()
+			if tmp.size + i >= n:
+				i=n
+				urls.append(tmp)
+			else :	
+				tmp	= Url.serialize( tmp )+"~" 
+				i	+=tmp.size()
+				bundle+=tmp
+		
+		return bundle
+	
+	def harness(self):
+		if not self.urls:
+				t = TcpClient.TcpClient( masterAddress, self.cPort )
+				t.send( TcpMsg.T_PENDING )
+				
+		while self.urls :
+			n = self.maxWorkers-self.aliveWorkers
+			if n>0 :
+				i=0
+				while i<n :
+					self.threads.append( CrawlerSlave( self.urls, self.newUrls ) )
+					self.aliveWorkers += 1
+					self.workers[ self.aliveWorkers-1 ].start()
+					i+=1
+			
+			time.sleep( self.period ) 
+			self.pruneWorkers()
+		
+		while self.newUrls:
+			t = TcpClient.TcpClient( masterAddress, self.cPort )
+			t.send( TcpMsg.T_URL_TRANSFER+makeBundleFromRecordList( self.newUrls ) )
+	
+	def run(self):
+		self.harness()		
+	
+
+class Slave( TcpServer ):
+	"""
+	"""
+	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxThreads=2, threadUrls=100 ) :
+		self.useragent		= useragent
+		self.port 			= port
+		self.cPort			= cPort
+		
+		self.period			= period
+		
 		self.maxThreads 	= maxThreads
 		self.threadUrls		= threadUrls
 		self.numberThreads  = 0
 		
 		self.urls			= []
-		self.newUrls		= []
 		
-		self.threads		= []
-		self.aliveThreads 	= 0
+		t = TcpClient.TcpClient( masterAddress, self.cPort )
+		t.send( TcpMsg.T_PENDING )
 		
+	def harness(self):
+		overseer = OverseerThread(useragent = self.useragent, cPort = self.cPort, maxThreads  = self.maxThreads,
+										period = self.period, urls = self.urls
+										)
+		overseer.start()
+		self.listen()
+	
 	### Network ###
 	def process(self, data, address):
 		if msg.type == TcpMsg.T_DONE:
 			pass
-			
-		if msg.type == TcpMsg.T_DECO:
-			self.slavesAvailable.remove( address )
-			
-		if msg.type == Tcp.T_ID & self.clientAvailable.count(address) == 0:
-			self.append.remove( address )
-			t = TcpClient.TcpClient( "", 1646 )
-			t.send( TcpMsg.T_ACCEPTED )
-			
-		if msg.type == TcpMsg.T_PENDING & self.clientAvailable.count(address) == 0:
-			self.clientsAvailable.append( i )
-			
-		if msg.type == TcpMsg.T_PROCESSING:
-			self.
-			self.slavesAvailable.remove( address )
-			
+	
 		if msg.type == TcpMsg.T_URL_TRANSFER:
-			self.
+			self.addUrls( data )
 	
 	### CrawlerThread handling ###
 	
-	def harness(self):
-		if self.urls == 0:
-			on demande de nouveau truc 
-			
-		n = self.maxThreads-self.aliveThreads
-		if n>0 :
-			i,m = 0, min( len( self.urls ) // n + 1, self.threadUrls)
-			while i<n :
-				j,l=0,[]
-				while j<m:
-					l.append( self.urls.pop() )
-					j+=1
-					
-				self.threads.append( CrawlerSlave( l ) )
-				self.aliveThreads += 1
-				self.threads[ self.aliveThreads-1 ].start()
-				i+=1
-			
-			
+	def addUrls(self, data ):
+		self.urls.extend( Url.unserializeList( data[1:] ) )	

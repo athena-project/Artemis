@@ -25,10 +25,10 @@ class TcpServer:
 	
 	"""
 	
-	def __init__(self, p):
+	def __init__(self, port):
 		self.sock = None
 		self.clientsConnected = []
-		self.port = p
+		self.port = port
 		self.host = ''#socket.gethostname()
 		
 	def __del__(self):

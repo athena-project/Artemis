@@ -77,3 +77,8 @@ class Url:
 			else:
 				j+=1
 		return l
+	
+	def recordList2list(rL):
+		l=[]
+		for r in rL:
+			l.append( Url( url=r.url ))

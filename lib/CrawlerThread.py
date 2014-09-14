@@ -25,9 +25,7 @@ class CrawlerThread( Thread ):
 	"""
 
 	def __ini__(self, contentTypeRules): 
-		"""
-			contentTypeRules		- contentType => Ressource type
-		"""
+		
 		self.contentTypeRules = contentTypeRules
 		self.urls = []
 		self.newUrls = [] 

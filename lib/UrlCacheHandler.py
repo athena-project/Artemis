@@ -41,44 +41,18 @@ class UrlCacheHandler:
 		self.oStream		= open( self.parentDir+str(self.wId), "w" )
 		self.lastStreamSize	= 0 	
 		
-		self.data = []
-	
-	def addSorted(self, elmt):
-		"ajout dans une liste triée, supposée sans l'éléménet"
-		n =  len( self.data )
-		i,j, mil=0,n, 0
-		while j-i>0: #calcul of the index 
-			mil = (i+j)//2
-			if self.data[mil].url < elmt.url:
-				i = mil+1
-			else:
-				j = mil -1
-			
-		self.data.append( self.data[n-1] )
-		k=n-1
-		while k>mil: #shift right from mil
-			self.data[ k ] =  self.data[ k-1 ]
-		self.data[ mil ] = elmt 
-	
-	def exists(self, elmt):
-		n =  len( self.data )
-		i,j, mil=0,n, 0
-		find=False
-		while j-i>0 && !find: #calcul of the index 
-			mil = (i+j)//2
-			if self.data[mil].url == elmt.url :
-				find = True
-			if self.data[mil].url < elmt.url:
-				i = mil+1
-			else:
-				j = mil -1
+		self.data = {}
 		
-		return find
+	def empty(self):
+		return (self.currentRamSize>0) || (self.currentMemSize>0)
+		
+	def exists(self, elmt):
+		return (elmt.url in self.data)
 		
 	def add(self, elmt):
 		size = elmt.size()
 		if self.currentRamSize + size < self.maxRamSize :
-			self.addSorted( elmt )
+			self.data[elmt.url] = url
 			currentRamSize += size 
 		else :
 			if self.currentMemSize + size < self.maxMemSize :
@@ -105,7 +79,7 @@ class UrlCacheHandler:
 				return None
 			slef.load()
 		
-		elmt = self.data.pop()
+		elmt = self.data.popitem()
 		self.currentRamSize -= elmt.size()
 		return elmt
 		
@@ -115,7 +89,10 @@ class UrlCacheHandler:
 		for line in iStream:
 			buff += line
 		
-		self.data=Url.unSerializeList( buff )
-		
+		l=Url.unSerializeList( buff )
+		for url in l:
+			seld.data[l.url]=l
+			self.currentRamSize+=l.size()
+			
 		self.rId += 1
 		self.currentMemSize -= len(buff)
