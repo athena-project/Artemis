@@ -51,24 +51,39 @@ class WorkerThread( Thread ):
 		urlObject = urlparse( url )	
 		if( urlObject.scheme == "http" or urlObject.scheme == "https"):
 			self.http( url )
-		else if( urlObject.scheme == "ftp" or urlObject.scheme == "ftps"):
-			self.ftp( url )
+		#if( urlObject.scheme == "ftp" or urlObject.scheme == "ftps"):
+		#	self.ftp( url )
 		else :
+			pass
 			#log
 			
 	def http( self, url ):
 		r = request.urlopen( url)	
+		cT = r.getheader("Content-Type")
 		if( r.status == 200 ):
-			
+			if None == cT or (cT not in self.contentTypeRules):
+				#log
+				pass
+			else:
+				ressource = self.contentTypesRules[cT]()
+				ressource.url		= url
+				ressource.domain	= 
+				ressource.sizes
+				ressource.contentTypes
+				ressource.times
+				ressource.md5
+				ressource.lastUpdate
+				ressource.data
 		else:
+			pass
 			#log
 	
-	def ftp( self, url):
-		r = request.urlopen( url)	
-		if( r.status == 200 ):
-			
-		else:
-			#log
+	#def ftp( self, url):
+	#	r = request.urlopen( url)	
+	#	if( r.status == 200 ):
+	#		
+	#	else:
+	#		#log
 			
 			
 class OverseerThread( Thread ):
