@@ -23,5 +23,35 @@
 #t.initNetworking()
 #t.listen()
 
+import configparser
 import CrawlerMaster 
-r = CrawlerMaster.Master()
+
+
+def configDict2boolDict(cDict):
+	d={}
+	for key in cDict:
+		d[key]=cDict.getboolean(key)
+	return d
+
+
+config = configparser.ConfigParser()
+config.read('../conf/master.ini')
+
+
+
+
+master = CrawlerMaster.Master(
+	useragent		= config['General']['useragent'], 
+	cPort			= int( config['General']['cPort'] ), 
+	port			= int( config['General']['sPort'] ), 
+	period			= int( config['General']['period'] ), 
+	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
+	domainRules		= configDict2boolDict( config['DomainRules'] ),
+	protocolRules	= configDict2boolDict( config['ProtocolRules'] ),
+	sourceRules		= configDict2boolDict( config['SourceRules'] ),
+	delay 			= int( config['Update']['delay'] ),
+	nSqlUrls		= int( config['Update']['nSqlUrls'] ),
+	nMemUrls		= int( config['Update']['nMemUrls'] ),
+)
+
+master.crawl()

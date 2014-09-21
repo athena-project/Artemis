@@ -20,6 +20,7 @@ import time
 from urllib.parse import urlparse
 from TcpServer import TcpServer
 from TcpClient import TcpClient
+from TcpMsg    import TcpMsg
 import UrlCacheHandler
 import RobotCacheHandler
 from threading import Thread, RLock
@@ -36,7 +37,7 @@ class MasterThread( Thread ):
 		
 		self.action				= action 
 		self.slavesAvailable	= slavesAvailable
-		self.cPort				= cport
+		self.cPort				= cPort
 	
 		self.urlCacheHandler	= urlCacheHandler
 		
@@ -85,13 +86,14 @@ class MasterThread( Thread ):
 		
 		return bundle				
 	
-	def crawl(self, address):
+	def crawl(self):
 		while True:
-			for slave in self.slavesAvailable:
-				t = TcpClient.TcpClient( address, self.cPort )
+			for slaveAdress in self.slavesAvailable:
+				t = TcpClient.TcpClient( slaveAdress, self.cPort )
+				t = TcpClient.TcpClient( slaveAdress, self.cPort )
 				t.send( TcpMsg.T_URL_TRANSFER+makeBundle() )
 				self.slavesAvailable.remove( slave )
-			sleep( self.period )
+			time.sleep( self.period )
 
 	#def update(self):
 		#query = ( UrlRecord.select().
@@ -121,9 +123,9 @@ class MasterThread( Thread ):
 			#sleep( self.period )
 	
 	def run(self):
-		if action == MasterThread.ACTION_CRAWL:
+		if self.action == MasterThread.ACTION_CRAWL:
 			self.crawl()
-		if action == MasterThread.ACTION_UPDATE:
+		if self.action == MasterThread.ACTION_UPDATE:
 			self.update()
 		
 
@@ -132,7 +134,7 @@ class Master( TcpServer ):
 	"""
 	
 	
-	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, contentTypes={"*":False}, domainRules={"*":False}, protocolRules={"*":False}, sourceRules={"*":False}, delay = 36000, nSqlUrls=100, mSqlUrls=100) :
+	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, contentTypes={"*":False}, domainRules={"*":False}, protocolRules={"*":False}, sourceRules={"*":False}, delay = 36000, nSqlUrls=100, nMemUrls=100) :
 		"""
 			@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
 			@domainRules			- domain => true ie allowed False forbiden *=>all
@@ -155,17 +157,18 @@ class Master( TcpServer ):
 		
 		self.delay				= delay # de maj
 		self.nSqlUrls			= nSqlUrls#number of sql url per update block
-		self.nMemUrls			= mSqlUrls
+		self.nMemUrls			= nMemUrls
 		
 		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler()
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
+		
+		self.initNetworking()
 	
 	def crawl(self):
 		master = MasterThread( action = MasterThread.ACTION_CRAWL, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
 								period = self.period, nSqlUrls = self.nSqlUrls, nMemUrls = self.nMemUrls)
 		master.start()
-		
 		self.listen()
 
 	def update(self):

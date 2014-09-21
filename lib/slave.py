@@ -16,5 +16,17 @@
 #	@autor Severus21
 #
 
+import configparser
 import CrawlerSlave
-s=CrawlerSlave.Slave()
+
+config = configparser.ConfigParser()
+config.read('../conf/slave.ini')
+
+s=CrawlerSlave.Slave(
+	masterAddress	= config['General']['masterAddress'],
+	useragent		= config['General']['useragent'], 
+	cPort			= int( config['General']['cPort'] ), 
+	port			= int( config['General']['sPort'] ), 
+	period			= int( config['General']['period'] ), 
+	maxWorkers		= int( config['Thread']['maxWorkers'] )
+)

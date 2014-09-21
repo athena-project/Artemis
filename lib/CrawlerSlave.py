@@ -185,21 +185,22 @@ class OverseerThread( Thread ):
 class Slave( TcpServer ):
 	"""
 	"""
-	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxThreads=2, threadUrls=100 ) :
+	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxWorkers=2) :
 		self.useragent		= useragent
 		TcpServer.__init__(self, port)				 #server port
 		self.cPort			= cPort
 		
 		self.period			= period
 		
-		self.maxThreads 	= maxThreads
-		self.threadUrls		= threadUrls
-		self.numberThreads  = 0
+		self.maxWorkers 	= maxWorkers
+		self.numberWorkers  = 0
 		
 		self.urls			= []
 		
 		t = TcpClient( masterAddress, self.cPort )
 		t.send( TcpMsg.T_PENDING )
+		
+		self.initNetworking()
 		
 	def harness(self):
 		overseer = OverseerThread(useragent = self.useragent, cPort = self.cPort, maxThreads  = self.maxThreads,
