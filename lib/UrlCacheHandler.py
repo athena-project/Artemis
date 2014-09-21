@@ -32,8 +32,10 @@ class UrlCacheHandler:
 		
 		self.currentRamSize	= 0
 		self.currentMemSize	= 0
-		
-		self.parentDir 		= parentDir if parentDir[ len(parentDir)-1 ] == "/" else parentDir+"/"
+		if  parentDir:
+			self.parentDir 		= parentDir if  parentDir[ -1 ] == "/"  else parentDir+"/"
+		else :
+			self.parentDir = ""
 
 		self.rId			= 0
 		self.wId			= 0
@@ -44,7 +46,7 @@ class UrlCacheHandler:
 		self.data = {}
 		
 	def empty(self):
-		return (self.currentRamSize>0) || (self.currentMemSize>0)
+		return (self.currentRamSize>0) | (self.currentMemSize>0)
 		
 	def exists(self, elmt):
 		return (elmt.url in self.data)

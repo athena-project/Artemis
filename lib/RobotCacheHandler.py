@@ -17,13 +17,11 @@
 #
 
 import urllib.robotparser
-import deque
-
-class UrlCacheHandler:
+from collections import deque
+class RobotCacheHandler:
 	
 	def __init__(self, maxRamElmt=10000, lifetime=3600):
 		"""
-			Warning !!!!! Do not use with thread .....................;
 			@param maxRamSize	-
 			@param maxMemSize
 			@param

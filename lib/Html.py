@@ -53,10 +53,15 @@ class HTMLParser( html.parser ):
 		
 		if( t2.scheme =='' ):
 			if( t2.netloc == '' ):
-				url = self.urlObj.scheme+"://"+self.urlObj.path+"/"+url
+				url = self.urlObj.scheme+"://"+self.urlObj.netloc+"/"
 			else:
-				url = self.urlObj.scheme+"://"+url
+				url = self.urlObj.scheme+"://"
+		else :
+			url = t2.sheme
 			
+		url += t2.path 
+		if t2.query :
+			url+="?"+t2.query
 
 		tmp = Url(tag, url, ctype, charset, alt)
 		self.relatedRessources.append( tmp )

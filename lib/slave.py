@@ -16,7 +16,5 @@
 #	@autor Severus21
 #
 
-import TcpClient
-import time
-t =TcpClient.TcpClient( "", 1645 )
-
+import CrawlerSlave
+s=CrawlerSlave.Slave()

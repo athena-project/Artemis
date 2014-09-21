@@ -58,6 +58,22 @@ class Ressource( Model ):
 		
 		self.data = ""
 		
+	def hydrate(self, record):
+		#for key in record.__dict__ :
+			#setattr(self, key, getattr(record, key) )
+		self.id 				= record.id
+		self.url				= record.url
+		self.domain				= record.domain
+			
+		self.relatedRessources	= unserializeTupleList( record.relatedRessources )
+		self.sizes				= unserialiseSimpleList( record.sizes )
+		self.contentTypes		= unserialiseSimpleList( record.contentTypes )
+		self.times				= unserialiseSimpleList( record.times )
+		self.md5				= unserialiseSimpleList( record.md5 )
+		self.chunks				= unserialiseSimpleList( record.chunks )
+		
+		self.lastUpdate			= record.lastUpdate
+		
 	def serializeSimpleList(self, l):
 		s = ""
 		for x in l:
@@ -103,8 +119,27 @@ class Ressource( Model ):
 		for x in tmpL:
 			l.append( self.unserializeTuple( x , f1, f2) )
 		return l
-		
+	
+	def getById(id):
+		try:
+			record = RessourceRecord.get( RessourceRecord.id = id )
+			r = Ressource()
+			#Decorateur ?
+			r.hydrate( record ) 
+		except peewee.DoesNotExists:
+			return None
+			
+	def getByUrl(url):
+		try:
+			record = RessourceRecord.get( RessourceRecord.url = url )
+			r = Ressource()
+			#Decorateur ?
+			r.hydrate( record ) 
+		except peewee.DoesNotExists:
+			return None
+	
 	def save(self):
+		#save on disk
 		exits = False
 		
 		if( self.id == -1):

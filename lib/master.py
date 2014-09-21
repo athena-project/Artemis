@@ -16,9 +16,12 @@
 #	@autor Severus21
 #
 
-import TcpServer
+#import TcpServer
 
 
-t =TcpServer.TcpServer( 1645 )
-t.initNetworking()
-t.listen()
+#t =TcpServer.TcpServer( 1645 )
+#t.initNetworking()
+#t.listen()
+
+import CrawlerMaster 
+r = CrawlerMaster.Master()

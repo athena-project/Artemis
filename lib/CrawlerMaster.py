@@ -30,17 +30,20 @@ from threading import Thread, RLock
 class MasterThread( Thread ):
 	ACTION_CRAWL	= 0
 	ACTION_UPDATE	= 1
-	def __init__(self, action=MasterThread.ACTION_CRAWL, cPort, slavesAvailable, urlCacheHandler, period, nSqlUrls, nMemUrls ):
+	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, nSqlUrls, nMemUrls ):
 		Thread.__init__(self)
 		
+		
+		self.action				= action 
 		self.slavesAvailable	= slavesAvailable
 		self.cPort				= cport
 	
 		self.urlCacheHandler	= urlCacheHandler
 		
-		self.nSqlUrls
-		self.nMemUrls
-		self.period
+		self.nSqlUrls			= nSqlUrls
+		self.nMemUrls			= nMemUrls
+		self.period				= period
+		
 	def makeBundle(self):
 		bundle = ""
 		urlSize = self.urlCacheHandler.currentRamSize + self.urlCacheHandler.currentMemSize
@@ -48,7 +51,7 @@ class MasterThread( Thread ):
 		
 		if urlSize < TcpMsg.T_URL_TRANSFER_SIZE :
 			n = urlSize
-		else
+		else:
 			n = TcpMsg.T_URL_TRANSFER_SIZE
 		
 		while i<n :
@@ -90,32 +93,32 @@ class MasterThread( Thread ):
 				self.slavesAvailable.remove( slave )
 			sleep( self.period )
 
-	def update(self):
-		query = ( UrlRecord.select().
-				where( UrlRecord.lastVisited < time.time()-self.delay  ).
-				order_by( UrlRecord.id).
-				paginate(1, self.nSqlUrls)
-			   )
+	#def update(self):
+		#query = ( UrlRecord.select().
+				#where( UrlRecord.lastVisited < time.time()-self.delay  ).
+				#order_by( UrlRecord.id).
+				#paginate(1, self.nSqlUrls)
+			   #)
 			  
-		urls = Url.recordList2list( query.get() )
-		i = 0
+		#urls = Url.recordList2list( query.get() )
+		#i = 0
 		
-		while urls || !self.urlCacheHandler.empty() :
-			for slave in self.slavesAvailable:
-				if urls :
-					bundle = self.makeBundleFromRecordList( urls )
-				else:
-					bundle = self.makeBundle()
-					i+=
+		#while urls | (not self.urlCacheHandler.empty()) :
+			#for slave in self.slavesAvailable:
+				#if urls :
+					#bundle = self.makeBundleFromRecordList( urls )
+				#else:
+					#bundle = self.makeBundle()
+					#i+=
 					
-				t = TcpClient.TcpClient( slave, self.cPort )
-				t.send( TcpMsg.T_URL_TRANSFER+bundle )
-				self.slavesAvailable.remove( slave )
+				#t = TcpClient.TcpClient( slave, self.cPort )
+				#t.send( TcpMsg.T_URL_TRANSFER+bundle )
+				#self.slavesAvailable.remove( slave )
 				
-				if i>self.nMemUrls :
-					i=0
-					urls = Url.recordList2list( query.get() )
-			sleep( self.period )
+				#if i>self.nMemUrls :
+					#i=0
+					#urls = Url.recordList2list( query.get() )
+			#sleep( self.period )
 	
 	def run(self):
 		if action == MasterThread.ACTION_CRAWL:
@@ -129,7 +132,7 @@ class Master( TcpServer ):
 	"""
 	
 	
-	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, contentTypes={"*":True}, domainRules={"*":True}, protocolRules={"*":True}, sourceRules={"*":True}, delay = 36000, nSqlUrls=100, mSqlUrls=100) :
+	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, contentTypes={"*":False}, domainRules={"*":False}, protocolRules={"*":False}, sourceRules={"*":False}, delay = 36000, nSqlUrls=100, mSqlUrls=100) :
 		"""
 			@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
 			@domainRules			- domain => true ie allowed False forbiden *=>all
@@ -137,7 +140,7 @@ class Master( TcpServer ):
 			@param urlsPerSlave		- 
 		"""
 		self.cPort				= cPort #client port
-		self.port				= port #server port
+		TcpServer.__init__(self, port)				 #server port
 		
 		self.useragent 			= useragent
 		self.period				= period # delay(second) betwen two crawl
@@ -188,59 +191,51 @@ class Master( TcpServer ):
 	### Url Handling ###
 	def validUrl(self, url):
 		#Check in ram
-		if( self.urlCacheHandler.exists( url ) )
+		if( self.urlCacheHandler.exists( url ) ):
 			return False
 		
 		#Chek source
 		if url.source in self.sourceRules:
-			if !self.sourceRules[urlP.source]:
+			if not self.sourceRules[urlP.source]:
 				return False
 		else:
 			return False
 			
 		#Chek contentType
 		if url.t in self.contentTypes:
-			if !self.contentTypes[urlP.t]:
+			if not self.contentTypes[urlP.t]:
 				return False
 		else:
-			if !self.contentTypes["*"]:
+			if not self.contentTypes["*"]:
 				return False
 			
 		#Check domain and protocol
 		urlP = urlparse( url.url )
 		
 		if urlP.sheme in self.protocolRules:
-		  if !self.protocolRules[urlP.sheme]:
+		  if not self.protocolRules[urlP.sheme]:
 			  False
-		else :
-			if !self.protocolRules["*"]:
+		elif not self.protocolRules["*"]:
 				return False
 		
 		if urlP.netloc in self.domainRules:
-		  if !self.domainRules[urlP.netloc]:
+		  if not self.domainRules[urlP.netloc]:
 			  False
-		else :
-			if !self.domainRules["*"]:
+		elif not self.domainRules["*"]:
 				return False
 		
 		#Robot check
 		robot = self.robotCacheHandler.get( url )
-		if !robot.can_fetch(self.useragent , url.url):
+		if not robot.can_fetch(self.useragent , url.url):
 			return False
-			
-		#Sql check
-		try:
-			record = UrlRecord.get( UrlRecord.url == elmt.url )
-			if record.lastVisited <time.time()-self.delay:
-				return True
-			return False
-		except peewee.UrlRecordDoesNotExists:
-			return True
 			
 		return True
 			
 	def addUrls(self, data ):
 		urls = Url.unserializeList( data[1:] )
 		for url in urls :
-			self.urlCacheHandler.add( url ) if self.validUrl( url ) else pass
+			if self.validUrl( url ):
+				self.urlCacheHandler.add( url ) 
+			else:
+				pass
 				

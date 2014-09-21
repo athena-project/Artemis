@@ -15,11 +15,10 @@
 #  
 #	@autor Severus21
 #
+from urllib.parse import urlparse
+import peewee
 
-class UrlRecord
-from peewee import *
-
-class UrlRecord( Model ):
+class UrlRecord( peewee.Model ):
 	
 	id 				= peewee.PrimaryKeyField()
 	protocol		= peewee.TextField()

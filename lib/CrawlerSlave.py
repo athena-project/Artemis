@@ -16,16 +16,19 @@
 #	@autor Severus21
 #
 
-from urllib.request as request
+import urllib.request as request
 from urllib.parse import urlparse
 from threading import Thread, RLock
 import Url
 from TcpServer import TcpServer
 from TcpClient import TcpClient
+from TcpMsg import TcpMsg 
+
+import hashlib
 
 
 class WorkerThread( Thread ):
-	def __init(self, urls, newUrls, contentTypeRules)
+	def __init(self, urls, newUrls, contentTypeRules):
 		"""
 			contentTypeRules		- contentType => Ressource type
 		"""
@@ -35,7 +38,6 @@ class WorkerThread( Thread ):
 		self.urls				= urls
 		self.newUrls			= newUrls 
 	
-	
 	def run(self):
 		while True:
 			with urlsLock:
@@ -43,8 +45,17 @@ class WorkerThread( Thread ):
 					return None
 				url = self.urls.pop()
 			
-			data = dispatch(url)
-			#Analyse data underway a faire 
+			#Sql check
+			allowed = False
+			try:
+				record = UrlRecord.get( UrlRecord.url == elmt.url )
+				if record.lastVisited <time.time()-self.delay:
+					allowed = True
+			except peewee.UrlRecordDoesNotExists:
+				allowed = True
+			
+			if allowed:
+				data = dispatch( url )
 	
 	### Network handling ###
 	def dispatch(self, url):
@@ -65,15 +76,34 @@ class WorkerThread( Thread ):
 				#log
 				pass
 			else:
-				ressource = self.contentTypesRules[cT]()
-				ressource.url		= url
-				ressource.domain	= 
-				ressource.sizes
-				ressource.contentTypes
-				ressource.times
-				ressource.md5
-				ressource.lastUpdate
-				ressource.data
+				#Md5
+				m_md5 = hashlib.md5()
+				m_md5.update(key)
+				h_md5 = m_md5.hexdigest()
+				
+				ressource = contentTypesRules[cT].getByUrl( url )
+				if ressource == None:
+					ressource = self.contentTypesRules[cT]()
+					ressource.url					= url
+					ressource.domain				= urlparse( url ).netloc
+					ressource.sizes.append(			len(r.data ) ) 
+					ressource.contentTypes.append( 	cT ) 
+					ressource.times.append( 		time.time() )
+					ressource.md5.append(	 		h_md5  )
+					ressource.lastUpdate			= time.time()
+					ressource.data					= r.data
+				else:
+					if h_md5 == ressource.md5[-1]:
+						ressource.data					= r.data
+					
+					ressource.size.append( 			len(r.data ) )
+					ressource.contentTypes.append( 	cT ) 
+					ressource.times.append( 		time.time() )
+					ressource.md5.append( 			h_md5  )
+					ressource.lastUpdate			= time.time()
+					
+				ressource.save()	
+					
 		else:
 			pass
 			#log
@@ -87,7 +117,7 @@ class WorkerThread( Thread ):
 			
 			
 class OverseerThread( Thread ):
-	def __init__(self, useragent, cPort, maxThreads, period, urls)):
+	def __init__(self, useragent, cPort, maxThreads, period, urls):
 		Thread.__init__(self)
 		self.useragent		= useragent
 		self.cPort			= cPort
@@ -103,7 +133,7 @@ class OverseerThread( Thread ):
 		
 	def pruneWorkers(self):
 		for worker in self.workers:
-			if !worker.is_alive():
+			if not worker.is_alive():
 				self.aliveWorkers -=1
 				del worker
 
@@ -157,7 +187,7 @@ class Slave( TcpServer ):
 	"""
 	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxThreads=2, threadUrls=100 ) :
 		self.useragent		= useragent
-		self.port 			= port
+		TcpServer.__init__(self, port)				 #server port
 		self.cPort			= cPort
 		
 		self.period			= period
@@ -168,7 +198,7 @@ class Slave( TcpServer ):
 		
 		self.urls			= []
 		
-		t = TcpClient.TcpClient( masterAddress, self.cPort )
+		t = TcpClient( masterAddress, self.cPort )
 		t.send( TcpMsg.T_PENDING )
 		
 	def harness(self):
