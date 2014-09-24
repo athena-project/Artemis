@@ -30,3 +30,5 @@ s=CrawlerSlave.Slave(
 	period			= int( config['General']['period'] ), 
 	maxWorkers		= int( config['Thread']['maxWorkers'] )
 )
+
+s.harness()

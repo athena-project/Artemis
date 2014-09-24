@@ -22,6 +22,7 @@ from TcpServer import TcpServer
 from TcpClient import TcpClient
 from TcpMsg    import TcpMsg
 import UrlCacheHandler
+import Url
 import RobotCacheHandler
 from threading import Thread, RLock
 
@@ -57,14 +58,13 @@ class MasterThread( Thread ):
 		
 		while i<n :
 			tmp = self.urlCacheHandler.get()
-			if tmp.size + i >= n:
+			if tmp.size() + i > n:
 				i=n
 				self.urlCacheHandler.add(tmp)
 			else :	
-				tmp	= Url.serialize( tmp )+"~" 
-				i	+=tmp.size()
+				tmp	= tmp.serialize()+"~" 
+				i	+=len(tmp)
 				bundle+=tmp
-		
 		return bundle
 		
 	def makeBundleFromList(self, l):
@@ -83,16 +83,15 @@ class MasterThread( Thread ):
 				tmp	= Url.serialize( tmp )+"~" 
 				i	+=tmp.size()
 				bundle+=tmp
-		
 		return bundle				
 	
 	def crawl(self):
 		while True:
 			for slaveAdress in self.slavesAvailable:
-				t = TcpClient.TcpClient( slaveAdress, self.cPort )
-				t = TcpClient.TcpClient( slaveAdress, self.cPort )
-				t.send( TcpMsg.T_URL_TRANSFER+makeBundle() )
-				self.slavesAvailable.remove( slave )
+				t = TcpClient( slaveAdress, self.cPort )
+				t = TcpClient( slaveAdress, self.cPort )
+				t.send( TcpMsg.T_URL_TRANSFER+self.makeBundle() )
+				self.slavesAvailable.remove( slaveAdress )
 			time.sleep( self.period )
 
 	#def update(self):
@@ -180,14 +179,14 @@ class Master( TcpServer ):
 		self.listen()
 		
 	### Network ###
-	def process(self, data, address):
-		if msg.type == TcpMsg.T_DONE:
+	def process(self, type, data, address):
+		if type == TcpMsg.T_DONE:
 			pass
 			
-		if msg.type == TcpMsg.T_PENDING:
-			self.slavesAvailable.append( address )
+		if type == TcpMsg.T_PENDING:
+			self.slavesAvailable.append( address[0] )
 			
-		if msg.type == TcpMsg.T_URL_TRANSFER:
+		if type == TcpMsg.T_URL_TRANSFER:
 			self.addUrls( data )
 	
 	

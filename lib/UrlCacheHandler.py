@@ -52,13 +52,15 @@ class UrlCacheHandler:
 		return (elmt.url in self.data)
 		
 	def add(self, elmt):
+		
 		size = elmt.size()
 		if self.currentRamSize + size < self.maxRamSize :
-			self.data[elmt.url] = url
-			currentRamSize += size 
+			self.data[elmt.url] = elmt
+			self.currentRamSize += size 
 		else :
 			if self.currentMemSize + size < self.maxMemSize :
 				self.write( elmt, size )
+		
 			
 	def write(self, elmt, size):
 		if self.lastStreamSize + size > self.maxRamSize :
@@ -81,7 +83,7 @@ class UrlCacheHandler:
 				return None
 			slef.load()
 		
-		elmt = self.data.popitem()
+		elmt = self.data.popitem()[1]
 		self.currentRamSize -= elmt.size()
 		return elmt
 		

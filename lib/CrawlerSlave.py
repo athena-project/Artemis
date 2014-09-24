@@ -117,13 +117,14 @@ class WorkerThread( Thread ):
 			
 			
 class OverseerThread( Thread ):
-	def __init__(self, useragent, cPort, maxThreads, period, urls):
+	def __init__(self, masterAddress, useragent, cPort, maxWorkers, period, urls):
 		Thread.__init__(self)
+		self.masterAddress	= masterAddress
 		self.useragent		= useragent
 		self.cPort			= cPort
 		
 		self.period			= period
-		self.maxWorkers 	= maxThreads
+		self.maxWorkers 	= maxWorkers
 		
 		self.workers 	= []
 		self.aliveWorkers 	= 0
@@ -158,7 +159,7 @@ class OverseerThread( Thread ):
 	
 	def harness(self):
 		if not self.urls:
-				t = TcpClient.TcpClient( masterAddress, self.cPort )
+				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_PENDING )
 				
 		while self.urls :
@@ -175,7 +176,7 @@ class OverseerThread( Thread ):
 			self.pruneWorkers()
 		
 		while self.newUrls:
-			t = TcpClient.TcpClient( masterAddress, self.cPort )
+			t = TcpClient.TcpClient( self.masterAddress, self.cPort )
 			t.send( TcpMsg.T_URL_TRANSFER+makeBundleFromRecordList( self.newUrls ) )
 	
 	def run(self):
@@ -186,6 +187,7 @@ class Slave( TcpServer ):
 	"""
 	"""
 	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxWorkers=2) :
+		self.masterAddress	= masterAddress
 		self.useragent		= useragent
 		TcpServer.__init__(self, port)				 #server port
 		self.cPort			= cPort
@@ -203,18 +205,18 @@ class Slave( TcpServer ):
 		self.initNetworking()
 		
 	def harness(self):
-		overseer = OverseerThread(useragent = self.useragent, cPort = self.cPort, maxThreads  = self.maxThreads,
-										period = self.period, urls = self.urls
+		overseer = OverseerThread(masterAddress = self.masterAddress, useragent = self.useragent, cPort = self.cPort,
+										maxWorkers  = self.maxWorkers, period = self.period, urls = self.urls
 										)
 		overseer.start()
 		self.listen()
 	
 	### Network ###
-	def process(self, data, address):
-		if msg.type == TcpMsg.T_DONE:
+	def process(self, type, data, address):
+		if type == TcpMsg.T_DONE:
 			pass
 	
-		if msg.type == TcpMsg.T_URL_TRANSFER:
+		if type == TcpMsg.T_URL_TRANSFER:
 			self.addUrls( data )
 	
 	### CrawlerThread handling ###

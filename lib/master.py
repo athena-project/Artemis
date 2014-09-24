@@ -24,8 +24,8 @@
 #t.listen()
 
 import configparser
+import Url
 import CrawlerMaster 
-
 
 def configDict2boolDict(cDict):
 	d={}
@@ -53,5 +53,6 @@ master = CrawlerMaster.Master(
 	nSqlUrls		= int( config['Update']['nSqlUrls'] ),
 	nMemUrls		= int( config['Update']['nMemUrls'] ),
 )
-
+for url in config['Gateway']:
+	master.urlCacheHandler.add( Url.Url(url=url) )
 master.crawl()

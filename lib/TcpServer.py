@@ -41,7 +41,7 @@ class TcpServer:
 		self.sock.listen( 5 )	
 	
 	#Data is a string
-	def process(self, data, address):
+	def process(self, type, data, address):
 		pass
 
 	def listen(self):
@@ -70,11 +70,11 @@ class TcpServer:
 						client.close()
 						if( len(self.clientsConnected) > 0 ):
 							self.clientsConnected.pop( i )
-						
-					while j<size:
-						buffer = client.recv( 4096 )
-						data += buffer.decode()
-						j+=4096
-					
-					self.process( data, client.getpeername() )
+					else:	
+						while j<size:
+							buffer = client.recv( 4096 )
+							data += buffer.decode()
+							j+=4096
+												
+						self.process( data[:TcpMsg.T_TYPE_SIZE], data[TcpMsg.T_TYPE_SIZE:], client.getpeername() )
 					i+=1

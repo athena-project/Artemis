@@ -14,6 +14,8 @@ class TcpMsg:
 			T_URL_TRANSFER									( send by both )
 	
 	"""
+	T_TYPE_SIZE			= 1
+	
 	T_ACCEPTED 			= '1'
 	T_ACCEPTED_SIZE		= 0
 	T_DECO 				= '2'
