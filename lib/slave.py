@@ -28,7 +28,8 @@ s=CrawlerSlave.Slave(
 	cPort			= int( config['General']['cPort'] ), 
 	port			= int( config['General']['sPort'] ), 
 	period			= int( config['General']['period'] ), 
-	maxWorkers		= int( config['Thread']['maxWorkers'] )
+	maxWorkers		= int( config['Thread']['maxWorkers'] ),
+	delay			= int( config['Update']['delay'] )
 )
 
 s.harness()

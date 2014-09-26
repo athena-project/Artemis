@@ -1,4 +1,4 @@
-import peewee
-from peewee import *
+import pymysql
 
-db =  MySQLDatabase(db='artemis', host='localhost', user='root',passwd='rj7@kAv;8d7_e(E6:m4-w&')
+def getConn():
+	return pymysql.connect(database='artemis', host='localhost', user='root',passwd='rj7@kAv;8d7_e(E6:m4-w&')

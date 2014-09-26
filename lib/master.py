@@ -37,9 +37,6 @@ def configDict2boolDict(cDict):
 config = configparser.ConfigParser()
 config.read('../conf/master.ini')
 
-
-
-
 master = CrawlerMaster.Master(
 	useragent		= config['General']['useragent'], 
 	cPort			= int( config['General']['cPort'] ), 
@@ -54,5 +51,5 @@ master = CrawlerMaster.Master(
 	nMemUrls		= int( config['Update']['nMemUrls'] ),
 )
 for url in config['Gateway']:
-	master.urlCacheHandler.add( Url.Url(url=url) )
+	master.urlCacheHandler.add( Url.Url(url="http://"+url) )
 master.crawl()

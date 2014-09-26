@@ -23,87 +23,124 @@ import Url
 from TcpServer import TcpServer
 from TcpClient import TcpClient
 from TcpMsg import TcpMsg 
-
+import time
+import peewee
+import Ressource	
+from contentTypeRules import *
+#from Text import *
+#from Ressource import *
+#from Html import *
 import hashlib
 
 
 class WorkerThread( Thread ):
-	def __init(self, urls, newUrls, contentTypeRules):
+	def __init__(self, urlsLock=None, urls=[], newUrls=[], delay=86400):
 		"""
-			contentTypeRules		- contentType => Ressource type
 		"""
 		Thread.__init__(self)
-		
-		self.contentTypeRules	= contentTypeRules
+		self.urlsLock			= urlsLock
 		self.urls				= urls
 		self.newUrls			= newUrls 
+		self.delay				= delay
+		self.manager 			= Url.UrlManager()
 	
 	def run(self):
 		while True:
-			with urlsLock:
+			with self.urlsLock:
 				if not self.urls :
 					return None
 				url = self.urls.pop()
-			
 			#Sql check
-			allowed = False
-			try:
-				record = UrlRecord.get( UrlRecord.url == elmt.url )
-				if record.lastVisited <time.time()-self.delay:
-					allowed = True
-			except peewee.UrlRecordDoesNotExists:
-				allowed = True
-			
-			if allowed:
-				data = dispatch( url )
+			record = self.manager.getByUrl( url.url )
+			if record == None:
+				self.dispatch( url, record )
+			elif record.lastVisited < time.time()-self.delay:
+				self.dispatch( url, record )
 	
 	### Network handling ###
-	def dispatch(self, url):
-		urlObject = urlparse( url )	
+	def dispatch(self, url, urlRecord):
+		urlObject = urlparse( url.url )	
 		if( urlObject.scheme == "http" or urlObject.scheme == "https"):
-			self.http( url )
+			self.http( url, urlObject, urlRecord )
 		#if( urlObject.scheme == "ftp" or urlObject.scheme == "ftps"):
 		#	self.ftp( url )
 		else :
 			pass
 			#log
 			
-	def http( self, url ):
-		r = request.urlopen( url)	
+	def http( self, url, urlObj, urlRecord ):
+		t1 = time.time()
+		r = request.urlopen( url.url)	
+		print( time.time()-t1)
+		#ContentType 
 		cT = r.getheader("Content-Type")
+		cTl=cT.split(";")
+		
+		contentType	= cTl[0].strip()
+		charset		= "UTF-8"
+		if len(cT)>1:
+			charset = cTl[1].split("=")
+			if len(charset)>1:
+				charset	= charset[1].strip()
+			else:
+				charset = charset[0].strip()
+		
 		if( r.status == 200 ):
-			if None == cT or (cT not in self.contentTypeRules):
+			if contentType not in contentTypeRules:
 				#log
 				pass
 			else:
+				ressourceManager	= contentTypeRules[ contentType ][1]()
+				ressource 			= ressourceManager.getByUrl( url=url.url )
+				t 					= time.time()
+				data 				= r.read()
+				print("marcher ")
 				#Md5
 				m_md5 = hashlib.md5()
-				m_md5.update(key)
+				m_md5.update(data)
 				h_md5 = m_md5.hexdigest()
 				
-				ressource = contentTypesRules[cT].getByUrl( url )
+				data				= data.decode(charset.lower())
+				
 				if ressource == None:
-					ressource = self.contentTypesRules[cT]()
-					ressource.url					= url
-					ressource.domain				= urlparse( url ).netloc
-					ressource.sizes.append(			len(r.data ) ) 
-					ressource.contentTypes.append( 	cT ) 
-					ressource.times.append( 		time.time() )
-					ressource.md5.append(	 		h_md5  )
-					ressource.lastUpdate			= time.time()
-					ressource.data					= r.data
+					ressource = contentTypeRules[ contentType ][0]()
+					ressource.url					= url.url
+					ressource.domain				= urlObj.netloc
+					ressource.data					= data
 				else:
 					if h_md5 == ressource.md5[-1]:
-						ressource.data					= r.data
+						ressource.data				= data
 					
-					ressource.size.append( 			len(r.data ) )
+					ressource.size.append( 			len(data ) )
 					ressource.contentTypes.append( 	cT ) 
 					ressource.times.append( 		time.time() )
 					ressource.md5.append( 			h_md5  )
-					ressource.lastUpdate			= time.time()
+					ressource.lastUpdate			= t
+				
+				ressource.sizes.append(			len(data ) ) 
+				ressource.contentTypes.append( 	cT ) 
+				ressource.times.append( 		time.time() )
+				ressource.md5.append(	 		h_md5  )
+				ressource.lastUpdate			= t
 					
+				#url maj
+				if urlRecord == None:
+					urlRecord=Url.UrlRecord( protocol=urlObject.scheme, domain=urlObject.netloc, url=url.url )
+				else:
+					urlRecord.lastMd5		= h_md5
+					urlRecord.lastVisited	= t
+				
+				self.manager.save(urlRecord)
 				ressource.save()	
-					
+				
+				#Feed the slave with the links owned by the current ressource
+				newUrls = ressource.extractUrls( urlObj )
+				if newUrls:
+					f = open("urls", "w")
+					for url in newUrls:
+						f.write( url.url+"\n")
+						
+					self.newUrls.extend( newUrls )
 		else:
 			pass
 			#log
@@ -117,7 +154,7 @@ class WorkerThread( Thread ):
 			
 			
 class OverseerThread( Thread ):
-	def __init__(self, masterAddress, useragent, cPort, maxWorkers, period, urls):
+	def __init__(self, masterAddress, useragent, cPort, maxWorkers, period, urls, delay):
 		Thread.__init__(self)
 		self.masterAddress	= masterAddress
 		self.useragent		= useragent
@@ -131,6 +168,9 @@ class OverseerThread( Thread ):
 		
 		self.newUrls		= []
 		self.urls			= urls
+		self.delay			= delay
+		
+		self.urlsLock = RLock()
 		
 	def pruneWorkers(self):
 		for worker in self.workers:
@@ -167,7 +207,8 @@ class OverseerThread( Thread ):
 			if n>0 :
 				i=0
 				while i<n :
-					self.threads.append( CrawlerSlave( self.urls, self.newUrls ) )
+					w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls, delay=self.delay )
+					self.workers.append( w )
 					self.aliveWorkers += 1
 					self.workers[ self.aliveWorkers-1 ].start()
 					i+=1
@@ -176,7 +217,7 @@ class OverseerThread( Thread ):
 			self.pruneWorkers()
 		
 		while self.newUrls:
-			t = TcpClient.TcpClient( self.masterAddress, self.cPort )
+			t = TcpClient( self.masterAddress, self.cPort )
 			t.send( TcpMsg.T_URL_TRANSFER+makeBundleFromRecordList( self.newUrls ) )
 	
 	def run(self):
@@ -186,7 +227,7 @@ class OverseerThread( Thread ):
 class Slave( TcpServer ):
 	"""
 	"""
-	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxWorkers=2) :
+	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxWorkers=2, delay=86400) :
 		self.masterAddress	= masterAddress
 		self.useragent		= useragent
 		TcpServer.__init__(self, port)				 #server port
@@ -197,18 +238,20 @@ class Slave( TcpServer ):
 		self.maxWorkers 	= maxWorkers
 		self.numberWorkers  = 0
 		
+		self.delay			= delay
+		
 		self.urls			= []
 		
 		t = TcpClient( masterAddress, self.cPort )
 		t.send( TcpMsg.T_PENDING )
 		
 		self.initNetworking()
+		self.overseer		= None
 		
 	def harness(self):
-		overseer = OverseerThread(masterAddress = self.masterAddress, useragent = self.useragent, cPort = self.cPort,
-										maxWorkers  = self.maxWorkers, period = self.period, urls = self.urls
-										)
-		overseer.start()
+		self.overseer = OverseerThread(masterAddress = self.masterAddress, useragent = self.useragent, cPort = self.cPort,
+										maxWorkers  = self.maxWorkers, period = self.period, urls = self.urls, delay=self.delay)
+		self.overseer.start()
 		self.listen()
 	
 	### Network ###
@@ -218,8 +261,12 @@ class Slave( TcpServer ):
 	
 		if type == TcpMsg.T_URL_TRANSFER:
 			self.addUrls( data )
+			if not self.overseer.is_alive():
+				self.overseer = OverseerThread(masterAddress = self.masterAddress, useragent = self.useragent, cPort = self.cPort,
+												maxWorkers  = self.maxWorkers, period = self.period, urls = self.urls,
+												delay=self.delay)
+				self.overseer.start()
 	
 	### CrawlerThread handling ###
-	
 	def addUrls(self, data ):
-		self.urls.extend( Url.unserializeList( data[1:] ) )	
+		self.urls.extend( Url.unserializeList( data ) )	

@@ -17,16 +17,68 @@
 #
 from urllib.parse import urlparse
 import peewee
+import SQLFactory
 
-class UrlRecord( peewee.Model ):
+
+
+class UrlManager:
+	def __init__(self):
+		self.con = SQLFactory.getConn()
 	
-	id 				= peewee.PrimaryKeyField()
-	protocol		= peewee.TextField()
-	domain 			= peewee.TextField()
-	url 			= peewee.TextField()
-	lastMd5			= peewee.TextField()
-	lastVisited 	= peewee.TimeField()
-	relatedRessource= peewee.TextField() #type(link to an sql table):id
+	def __del__(self):
+		self.con.close()
+		
+	def getByUrl(self, url):
+		cur = self.con.cursor()
+		cur.execute("SELECT * FROM urlrecord WHERE url='"+url+"'")
+
+		r=None
+		for row in cur: #url is a unique id
+			r=UrlRecord( row[0], row[1], row[2], row[3], row[4], row[5] )
+		cur.close()
+		
+		return r
+		
+	def getByMd5(self, md5):
+		l=[]
+		
+		cur = self.con.cursor()
+		cur.execute("SELECT * FROM urlrecord WHERE md5='"+md5+"'")
+		for row in cur:
+			l.append( UrlRecord( row[0], row[1], row[2], row[3], row[4], row[5] ) )
+		cur.close()
+		
+		return l
+	
+	def insert(self, record):
+		cur = self.con.cursor()
+		cur.execute("INSERT INTO urlrecord (protocol, domain, url, lastMd5, lastVisited) VALUES ('"+record.protocol+
+					"', '"+record.domain+"', '"+record.url+"', '"+record.lastMd5+"', '"+str(record.lastVisited)+"')" )
+		self.con.commit()
+		cur.close()
+		
+	def update(self, record):
+		cur = self.con.cursor()
+		cur.execute("UPDATE urlrecord SET protocol:='"+record.protocol+"', domain:='"+record.domain+"', url:='"+record.url+
+					"', lastMd5:='"+record.lastMd5+"', lastVisited:='"+str(record.lastVisited)+"' WHERE id='"+str(record.id)+"'" )
+		self.con.commit()
+		cur.close()
+		
+	def save(self, record):
+		if record.id>-1:
+			self.update( record )
+		else:
+			self.insert( record )
+		
+class UrlRecord:
+	def __init__(self, id=-1, protocol="", domain="", url="", lastMd5="", lastVisited=0):
+		self.id 			= id
+		self.protocol		= protocol
+		self.domain 		= domain
+		self.url 			= url
+		self.lastMd5		= lastMd5
+		self.lastVisited 	= float( lastVisited )
+		#relatedRessource= peewee.TextField() #type(link to an sql table):id
 
 class Url:
 	def __init__(self,url, o="", t="", charset="", alt=""):
@@ -35,10 +87,14 @@ class Url:
 		
 		t = t.split(";")
 		self.type 		= t[0].strip() # contentType withour charset
-		if len(t)>1 & (not charset):
-			self.charset	= t[1]
-		else:
-			self.charset 	= charset
+		if len(t)>1 and (not charset):
+			charset = t[1].split("=")
+			if len(charset)>1:
+				charset	= charset[1]
+			else:
+				charset = charset[0]
+				
+		self.charset 	= charset.strip()
 		self.alt 		= alt
 		
 		
@@ -52,10 +108,10 @@ class Url:
 #Static function
 
 def serializeList( l):
-	buf = ""
+	buff = ""
 	for url in l:
 		buff+=url.serialize()+"~"
-	return buf
+	return buff
 		
 def unserialize( s):
 	origin, url, type, charset, alt= "", "", "", "", ""
@@ -65,18 +121,18 @@ def unserialize( s):
 			if k==0:
 				origin	= s[i:j]
 			if k==1:
-				url	= s[i:j]
+				url		= s[i:j]
 			if k==2:
-				type	=s[i:j]
+				type	= s[i:j]
 			if k==3:
-				charset=s[i:j]
+				charset	= s[i:j]
 			if k==4:
 				alt	=s[i:j]
 				
-			i,j,k=j,j+1,k+1
+			i,j,k=j+1,j+1,k+1
 		else:
 			j+=1
-	return Url( origin, url, type, charset, alt)
+	return Url( url, origin, type, charset, alt)
 
 def unserializeList( s ):
 	l = []
@@ -84,7 +140,7 @@ def unserializeList( s ):
 	while j<n:
 		if s[j] == "~":
 			l.append( unserialize( s[i:j] ) )
-			i,j=j,j+1
+			i,j=j+1,j+1
 		else:
 			j+=1
 	return l

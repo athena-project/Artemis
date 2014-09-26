@@ -17,22 +17,23 @@
 #
 
 import Url
-from Text import Text
+import SQLFactory
+from Text import *
 import html.parser 
 from urllib.parse import urlparse
 
 
-class HTMLParser( html.parser ):
+class HTMLParser( html.parser.HTMLParser ):
 	"""
 	"""
-	def __init__(self):
-		html.parser.__init__(self, p)
-		self.relatedRessources = []
-		self.urlObj = urlparse(p)
+	def __init__(self, parentUrl):
+		html.parser.HTMLParser.__init__(self)
+		self.relatedRessources 	 	= []
+		self.parentUrl			   	= parentUrl
 		
 	def handle_starttag(self, tag, attrs):
-		if( tag != 'a' && tag != 'img' && tag != 'link' && tag != 'script' && tag != 'source' ):
-			pass
+		if( tag != 'a' and tag != 'img' and tag != 'link' and tag != 'script' and tag != 'source' ):
+			return None
 		
 		url = ""
 		ctype = ""
@@ -40,7 +41,7 @@ class HTMLParser( html.parser ):
 		alt = ""
 		
 		for (name,value) in attrs :
-			if(name == 'href' | name =='download' | name== 'src'):
+			if(name == 'href' or name =='download' or name== 'src'):
 				url = value
 			if name == 'alt':
 				alt = value
@@ -50,31 +51,36 @@ class HTMLParser( html.parser ):
 				ctype = value
 				
 		t2 = urlparse( url )
-		
+
 		if( t2.scheme =='' ):
 			if( t2.netloc == '' ):
-				url = self.urlObj.scheme+"://"+self.urlObj.netloc+"/"
+				url = self.parentUrl.scheme+"://"+self.parentUrl.netloc+"/"
 			else:
-				url = self.urlObj.scheme+"://"
+				url = self.parentUrl.scheme+"://"+t2.netloc
 		else :
-			url = t2.sheme
+			url = t2.scheme+"://"+t2.netloc
 			
 		url += t2.path 
 		if t2.query :
 			url+="?"+t2.query
 
-		tmp = Url(tag, url, ctype, charset, alt)
+		tmp = Url.Url(url, o=tag, t=ctype, charset=charset, alt=alt)
 		self.relatedRessources.append( tmp )
+
+class HtmlManager(TextManager):
+	def __init__(self):
+		TextManager.__init__(self)
+		self.table		= "html"
 
 class Html( Text ):
 	"""
 	"""
 	
 	def __init__(self):
-		parent.__init__(self)
+		Text.__init__(self)
 	
-	def extractRelatedRessources(self):
-		p = HTMLParser()
+	def extractUrls(self, parentUrl):
+		p = HTMLParser(parentUrl)
 		p.feed( self.data )
 		p.close()
 		return p.relatedRessources

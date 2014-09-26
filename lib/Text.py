@@ -15,32 +15,45 @@
 #  
 #	@autor Severus21
 #
-
-from Ressource import Ressource
+import SQLFactory
+from Ressource import *
 import SQLFactory
 import peewee
 from peewee import *
 import hashlib
+import time
 
-class TextRecord( Model ):
-	"""
-	"""
-	id = peewee.PrimaryKeyField()
-	url = peewee.TextField()
-	domain = peewee.TextField()
-	relatedRessources = peewee.TextField()
-	sizes = peewee.TextField()
-	contentTypes = peewee.TextField()
-	times = peewee.TextField()
-	md5 = peewee.TextField()
-	chunks = peewee.TextField()
-	lastUpdate = peewee.DateTimeField( default=datetime.datetime.now ) 
-	
-	revision = peewee.TextField()
 
+class TextManager( RessourceManager):
+	def __init__(self):
+		RessourceManager.__init__(self)
+		self.table		= "text"
+		
 	
-	class Meta:
-        database = db
+	def insert(self, record):
+		cur = self.con.cursor()
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, md5, lastUpdate)"
+					+"VALUES ('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
+					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.md5+"', '"+record.lastUpdate
+					+"', '"+record.chunks+"', '"+record.revision+"')" )
+		self.con.commit()
+		cur.close()
+		
+	def update(self, record):
+		cur = self.con.cursor()
+		cur.execute("UPDATE urlRecord SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
+					"', sizes:='"+record.sizes+"', contentTypes:='"+record.contentTypes+"', times:='"+record.times+
+					+"', md5:='"+record.md5+"', lastUpdate:='"+record.lastUpdate+"', chunks:='"+record.chunks
+					+"', revision:='"+record.revision+"' WHERE id='"+str(record.id)+"'" )
+		self.con.commit()
+		cur.close()
+		
+
+class TextRecord( RessourceRecord ):
+	def __init__(self, id=-1, url="", domain="", relatedRessources="", size="", contentTypes="", times="", md5="", lastUpdate="", 
+	chunks="", revision=""):
+		RessourceRecord.__init__(id, url, domain, relatedRessources, size, contentTypes, times, md5, chunks, lastUpdate)
+		self.revision = revision
 
 
 class Text( Ressource ):
@@ -54,49 +67,50 @@ class Text( Ressource ):
 	def newRev(self):
 		if( hashlib.md5(self.data).hexdigest() == self.md5[ self.md5.count()-1 ] ):
 			pass
-		else
+		else:
+			pass
 			#newrev c++
 		
 
 	def save(self):
 		exits = False
 		
-		newRev()
-		if( self.id == -1):
-			try:
-				RessourceRecord.get( RessourceRecord.url = self.url )
-			except peewee.DoesNotExists:
-				pass
-			else:
-				exists = True
-		else:
-			exists = True
+		#newRev()
+		#if( self.id == -1):
+			#try:
+				#RessourceRecord.get( RessourceRecord.url == self.url )
+			#except peewee.DoesNotExists:
+				#pass
+			#else:
+				#exists = True
+		#else:
+			#exists = True
 		
-		if( exists ):
-			record = RessourceRecord( id			= self.id,	
-								 url				= self.url,
-								 domain				= self.domain,
-								 relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
-								 sizes				= self.serializeSimpleList(self.sizes, int),
-								 contentTypes		= self.serializeSimpleList(self.contentTypes, str),
-								 times				= self.serializeSimpleList(self.times, int),
-								 md5				= self.serializeSimpleList(self.md5, str),
-								 chunks				= self.serializeSimpleList(self.chunks, int),
-								 lastUpdate			= self.lastUpdate,
-								 revision			= self.revision
-								)
-		else:
-			record = RessourceRecord(url			= self.url,
-								 domain				= self.domain,
-								 relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
-								 sizes				= self.serializeSimpleList(self.sizes, int),
-								 contentTypes		= self.serializeSimpleList(self.contentTypes, str),
-								 times				= self.serializeSimpleList(self.times, int),
-								 md5				= self.serializeSimpleList(self.md5, str),
-								 chunks				= self.serializeSimpleList(self.chunks, int),
-								 lastUpdate			= self.lastUpdate,
-								 revision			= self.revision
-								)
-		record.save()
+		#if( exists ):
+			#record = RessourceRecord( id			= self.id,	
+								 #url				= self.url,
+								 #domain				= self.domain,
+								 #relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
+								 #sizes				= self.serializeSimpleList(self.sizes, int),
+								 #contentTypes		= self.serializeSimpleList(self.contentTypes, str),
+								 #times				= self.serializeSimpleList(self.times, int),
+								 #md5				= self.serializeSimpleList(self.md5, str),
+								 #chunks				= self.serializeSimpleList(self.chunks, int),
+								 #lastUpdate			= self.lastUpdate,
+								 #revision			= self.revision
+								#)
+		#else:
+			#record = RessourceRecord(url			= self.url,
+								 #domain				= self.domain,
+								 #relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
+								 #sizes				= self.serializeSimpleList(self.sizes, int),
+								 #contentTypes		= self.serializeSimpleList(self.contentTypes, str),
+								 #times				= self.serializeSimpleList(self.times, int),
+								 #md5				= self.serializeSimpleList(self.md5, str),
+								 #chunks				= self.serializeSimpleList(self.chunks, int),
+								 #lastUpdate			= self.lastUpdate,
+								 #revision			= self.revision
+								#)
+		#record.save()
 
 		
