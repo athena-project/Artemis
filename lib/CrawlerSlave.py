@@ -134,13 +134,7 @@ class WorkerThread( Thread ):
 				ressource.save()	
 				
 				#Feed the slave with the links owned by the current ressource
-				newUrls = ressource.extractUrls( urlObj )
-				if newUrls:
-					f = open("urls", "w")
-					for url in newUrls:
-						f.write( url.url+"\n")
-						
-					self.newUrls.extend( newUrls )
+				self.newUrls.extend( ressource.extractUrls( urlObj ) )
 		else:
 			pass
 			#log
