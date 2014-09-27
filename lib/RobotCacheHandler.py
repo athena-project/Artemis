@@ -15,9 +15,10 @@
 #  
 #	@autor Severus21
 #
-
+import time
 import urllib.robotparser
 from collections import deque
+
 class RobotCacheHandler:
 	
 	def __init__(self, maxRamElmt=10000, lifetime=3600):
@@ -36,30 +37,36 @@ class RobotCacheHandler:
 		self.accessMap		= deque() # (url stack )
 	
 	def add(self, key):
-		if self.currentRamElmt + 1 > self.maxRamElmt :
-			self.free( self.maxRamElmt % 10 )
+		if self.currentRamElmt  > self.maxRamElmt :
+			self.free( )
 		
 		self.currentRamElmt += 1
-		self.accesMap.append( key )
 		
-		self.data[ key ] = urllib.robotparser.RobotFileParser()
-		self.data[ key ].set_url( key )
-		self.data[ key ].read()
-		self.data[ key ].modified()
 		
-	def free(self, nbr):
-		i = 0
+		try:
+			self.data[ key ] = urllib.robotparser.RobotFileParser()
+			self.data[ key ].set_url( key )
+			self.data[ key ].read()
+			self.data[ key ].modified()
+			self.accessMap.append( key )
+		except Exception:
+			self.data[ key ] = None
+		
+	def free(self):
+		i,nbr = 0, self.currentRamElmt // 10
 		while i<nbr:
-			self.accessMap.popleft()
-		
+			tmp = self.accessMap.popleft()
+			del sel.data[tmp]
+			
 	def get( self, key ):
-		if key in self.data :
-			if time.time() - self.data[ key ].mtime() < lifetime:
+		if key in self.data:
+			if time.time() - self.data[ key ].mtime() < self.lifetime:
 				return self.data[key]
 			else:
 				self.data[ key ].read()
 				self.data[ key ].modified()
 				return self.data[key]
 		
-		return self.add( key )
+		self.add( key )
+		return self.data[ key ]
 		

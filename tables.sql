@@ -12,7 +12,7 @@ CREATE TABLE `urlrecord` (
   `lastMd5` varchar(256),
   `lastVisited` double,
   PRIMARY KEY (`id`),
-  UNIQUE key_url (`url`(30)),
+  KEY key_url (`url`(50)),
   KEY key_lastMd5 (`lastMd5`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
@@ -35,5 +35,5 @@ CREATE TABLE `html` (
   `chunks` text,
   `revision` INT,
   PRIMARY KEY (`id`),
-  UNIQUE key_url (`url`(30))
+  KEY key_url (`url`(50))
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;

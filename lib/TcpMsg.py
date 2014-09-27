@@ -33,6 +33,8 @@ class TcpMsg:
 	T_URL_TRANSFER		= '8'
 	T_URL_TRANSFER_SIZE	= 4096
 	
+	T_BUFFER_SIZE		= 4096
+	
 	def getSize( s ):
 		if s == TcpMsg.T_ACCEPTED:
 			return TcpMsg.T_ACCEPTED_SIZE

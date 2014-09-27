@@ -18,8 +18,7 @@
 import SQLFactory
 from Ressource import *
 import SQLFactory
-import peewee
-from peewee import *
+
 import hashlib
 import time
 

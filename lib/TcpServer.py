@@ -16,6 +16,8 @@
 #	@autor Severus21
 #
 
+import time
+
 import socket
 import select
 from TcpMsg import TcpMsg
@@ -37,8 +39,11 @@ class TcpServer:
 	
 	def initNetworking(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.setblocking(0)
 		self.sock.bind( (self.host, self.port) )
 		self.sock.listen( 5 )	
+		
+		
 	
 	#Data is a string
 	def process(self, type, data, address):
@@ -51,6 +56,7 @@ class TcpServer:
 			for connexion in connectionRequested:
 				connexion_avec_client, infos_connexion = connexion.accept()
 				# On ajoute le socket connecté à la liste des clients
+				connexion_avec_client.setblocking(0)
 				self.clientsConnected.append(connexion_avec_client)
 				
 			self.ready_to_read, self.ready_to_write, self.in_error = [], [], []
@@ -58,13 +64,16 @@ class TcpServer:
 				self.ready_to_read, self.ready_to_write, self.in_error = select.select( self.clientsConnected, [], [], 60)
 			except select.error:
 				pass
+			except Exception as e:
+				print("Exception", e)
+				pass
 			else:
 				i = 0
 				# On parcourt la liste des clients à lire
 				for client in self.ready_to_read:
-					buffer = client.recv( 4096 )
+					buffer = client.recv( TcpMsg.T_BUFFER_SIZE )
 					data = buffer.decode()
-					j, size= 4096, TcpMsg.getSize( data )
+					j, size= TcpMsg.T_BUFFER_SIZE, TcpMsg.getSize( data )
 					
 					if not len( buffer ):	
 						client.close()
@@ -72,9 +81,9 @@ class TcpServer:
 							self.clientsConnected.pop( i )
 					else:	
 						while j<size:
-							buffer = client.recv( 4096 )
+							buffer = client.recv( TcpMsg.T_BUFFER_SIZE )
 							data += buffer.decode()
-							j+=4096
-												
+							j+=TcpMsg.T_BUFFER_SIZE
+											
 						self.process( data[:TcpMsg.T_TYPE_SIZE], data[TcpMsg.T_TYPE_SIZE:], client.getpeername() )
 					i+=1

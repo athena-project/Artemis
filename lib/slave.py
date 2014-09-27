@@ -19,6 +19,13 @@
 import configparser
 import CrawlerSlave
 
+def configDict2boolDict(cDict):
+	d={}
+	for key in cDict:
+		d[key]=cDict.getboolean(key)
+	return d
+
+
 config = configparser.ConfigParser()
 config.read('../conf/slave.ini')
 
@@ -29,6 +36,7 @@ s=CrawlerSlave.Slave(
 	port			= int( config['General']['sPort'] ), 
 	period			= int( config['General']['period'] ), 
 	maxWorkers		= int( config['Thread']['maxWorkers'] ),
+	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
 	delay			= int( config['Update']['delay'] )
 )
 

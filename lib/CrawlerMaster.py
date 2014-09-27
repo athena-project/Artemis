@@ -44,53 +44,15 @@ class MasterThread( Thread ):
 		
 		self.nSqlUrls			= nSqlUrls
 		self.nMemUrls			= nMemUrls
-		self.period				= period
-		
-	def makeBundle(self):
-		bundle = ""
-		urlSize = self.urlCacheHandler.currentRamSize + self.urlCacheHandler.currentMemSize
-		i,n = 0,0
-		
-		if urlSize < TcpMsg.T_URL_TRANSFER_SIZE :
-			n = urlSize
-		else:
-			n = TcpMsg.T_URL_TRANSFER_SIZE
-		
-		while i<n :
-			tmp = self.urlCacheHandler.get()
-			if tmp.size() + i > n:
-				i=n
-				self.urlCacheHandler.add(tmp)
-			else :	
-				tmp	= tmp.serialize()+"~" 
-				i	+=len(tmp)
-				bundle+=tmp
-		return bundle
-		
-	def makeBundleFromList(self, l):
-		bundle = ""
-		urlSize = 0
-		for url in l:
-			urlSize += url.size()
-		i,n = 0, min( TcpMsg.T_URL_TRANSFER_SIZE, urlSize)
-		
-		while i<n :
-			tmp = urls.pop()
-			if tmp.size + i >= n:
-				i=n
-				urls.append(tmp)
-			else :	
-				tmp	= Url.serialize( tmp )+"~" 
-				i	+=tmp.size()
-				bundle+=tmp
-		return bundle				
+		self.period				= period			
 	
 	def crawl(self):
 		while True:
 			for slaveAdress in self.slavesAvailable:
 				t = TcpClient( slaveAdress, self.cPort )
 				t = TcpClient( slaveAdress, self.cPort )
-				t.send( TcpMsg.T_URL_TRANSFER+self.makeBundle() )
+				t.send( TcpMsg.T_URL_TRANSFER + 
+						Url.makeCacheBundle(self.urlCacheHandler, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE) )
 				self.slavesAvailable.remove( slaveAdress )
 			time.sleep( self.period )
 
@@ -133,9 +95,8 @@ class Master( TcpServer ):
 	"""
 	
 	
-	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, contentTypes={"*":False}, domainRules={"*":False}, protocolRules={"*":False}, sourceRules={"*":False}, delay = 36000, nSqlUrls=100, nMemUrls=100) :
+	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, domainRules={"*":False}, protocolRules={"*":False}, originRules={"*":False}, delay = 36000, nSqlUrls=100, nMemUrls=100) :
 		"""
-			@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
 			@domainRules			- domain => true ie allowed False forbiden *=>all
 			@param maxMemRobots		- maximun of robot.txt ept in disk cache
 			@param urlsPerSlave		- 
@@ -149,10 +110,9 @@ class Master( TcpServer ):
 		
 		self.slavesAvailable	= [] #address1,..
 		
-		self.contentTypes 		= contentTypes
 		self.domainRules		= domainRules
 		self.protocolRules		= protocolRules
-		self.sourceRules		= sourceRules
+		self.originRules		= originRules
 		
 		self.delay				= delay # de maj
 		self.nSqlUrls			= nSqlUrls#number of sql url per update block
@@ -180,6 +140,8 @@ class Master( TcpServer ):
 		
 	### Network ###
 	def process(self, type, data, address):
+		print("processing"+str(type))
+		
 		if type == TcpMsg.T_DONE:
 			pass
 			
@@ -196,26 +158,18 @@ class Master( TcpServer ):
 		if( self.urlCacheHandler.exists( url ) ):
 			return False
 		
-		#Chek source
-		if url.source in self.sourceRules:
-			if not self.sourceRules[urlP.source]:
+		#Chek origin
+		if url.origin in self.originRules:
+			if not self.originRules[url.origin]:
 				return False
 		else:
 			return False
-			
-		#Chek contentType
-		if url.t in self.contentTypes:
-			if not self.contentTypes[urlP.t]:
-				return False
-		else:
-			if not self.contentTypes["*"]:
-				return False
-			
+
 		#Check domain and protocol
 		urlP = urlparse( url.url )
 		
-		if urlP.sheme in self.protocolRules:
-		  if not self.protocolRules[urlP.sheme]:
+		if urlP.scheme in self.protocolRules:
+		  if not self.protocolRules[urlP.scheme]:
 			  False
 		elif not self.protocolRules["*"]:
 				return False
@@ -227,17 +181,17 @@ class Master( TcpServer ):
 				return False
 		
 		#Robot check
-		robot = self.robotCacheHandler.get( url )
-		if not robot.can_fetch(self.useragent , url.url):
+		robot = self.robotCacheHandler.get( urlP.scheme+"://"+urlP.netloc )
+		if robot != None and not robot.can_fetch(self.useragent , url.url):
 			return False
 			
 		return True
 			
 	def addUrls(self, data ):
+		print("adding",len(data) )
 		urls = Url.unserializeList( data[1:] )
 		for url in urls :
 			if self.validUrl( url ):
 				self.urlCacheHandler.add( url ) 
 			else:
 				pass
-				

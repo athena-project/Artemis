@@ -44,23 +44,24 @@ class UrlCacheHandler:
 		self.lastStreamSize	= 0 	
 		
 		self.data = {}
+	
+	def __del__(self):
+		self.oStream.close()
 		
 	def empty(self):
-		return (self.currentRamSize>0) | (self.currentMemSize>0)
+		return (self.currentRamSize>0) or (self.currentMemSize>0)
 		
 	def exists(self, elmt):
 		return (elmt.url in self.data)
 		
 	def add(self, elmt):
-		
 		size = elmt.size()
 		if self.currentRamSize + size < self.maxRamSize :
 			self.data[elmt.url] = elmt
 			self.currentRamSize += size 
 		else :
 			if self.currentMemSize + size < self.maxMemSize :
-				self.write( elmt, size )
-		
+				self.write( elmt, size )		
 			
 	def write(self, elmt, size):
 		if self.lastStreamSize + size > self.maxRamSize :
@@ -71,8 +72,9 @@ class UrlCacheHandler:
 			self.oStream = open( self.parentDir+str(self.wId), "w" )
 			
 		
-		oStream.write( elmt.serialize() )
+		self.oStream.write( elmt.serialize() )
 		self.lastStreamSize += size
+		self.currentMemSize		+= size
 	
 	def get( self ):
 		"""
@@ -81,7 +83,7 @@ class UrlCacheHandler:
 		if self.currentRamSize == 0 :
 			if self.currentMemSize == 0 :
 				return None
-			slef.load()
+			self.load()
 		
 		elmt = self.data.popitem()[1]
 		self.currentRamSize -= elmt.size()
@@ -95,8 +97,8 @@ class UrlCacheHandler:
 		
 		l=Url.unSerializeList( buff )
 		for url in l:
-			seld.data[l.url]=l
-			self.currentRamSize+=l.size()
+			seld.data[url.url]=url
+			self.currentRamSize+=url.size()
 			
 		self.rId += 1
 		self.currentMemSize -= len(buff)

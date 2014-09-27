@@ -16,7 +16,7 @@
 #	@autor Severus21
 #
 from urllib.parse import urlparse
-import peewee
+
 import SQLFactory
 
 
@@ -26,7 +26,8 @@ class UrlManager:
 		self.con = SQLFactory.getConn()
 	
 	def __del__(self):
-		self.con.close()
+		pass
+		#self.con.close()
 		
 	def getByUrl(self, url):
 		cur = self.con.cursor()
@@ -35,8 +36,8 @@ class UrlManager:
 		r=None
 		for row in cur: #url is a unique id
 			r=UrlRecord( row[0], row[1], row[2], row[3], row[4], row[5] )
-		cur.close()
-		
+			cur.close()
+			return r
 		return r
 		
 	def getByMd5(self, md5):
@@ -100,6 +101,9 @@ class Url:
 		
 	def size(self):
 		return len(self.origin)+len(self.url)+len(self.type)+len(self.charset)+len(self.alt)
+	
+	def serializeSize(self):
+		return self.size()+4
 		
 	def serialize(self):
 		return self.origin+"|"+self.url+"|"+self.type+"|"+self.charset+"|"+self.alt
@@ -107,13 +111,13 @@ class Url:
 
 #Static function
 
-def serializeList( l):
+def serializeList(l):
 	buff = ""
 	for url in l:
 		buff+=url.serialize()+"~"
 	return buff
 		
-def unserialize( s):
+def unserialize(s):
 	origin, url, type, charset, alt= "", "", "", "", ""
 	i,j,k,n=0,0,0, len(s)
 	while j<n:
@@ -134,7 +138,7 @@ def unserialize( s):
 			j+=1
 	return Url( url, origin, type, charset, alt)
 
-def unserializeList( s ):
+def unserializeList(s):
 	l = []
 	i,j,n=0,0,len(s)
 	while j<n:
@@ -144,9 +148,48 @@ def unserializeList( s ):
 		else:
 			j+=1
 	return l
+
+
+def makeBundle(urls, maxSize):
+	"""
+		@param maxSize			- in octetss
+	"""
+	i, bundle = 0, ""
+	 
+	while i<maxSize and urls :
+		url = urls.pop()
+		url.serialize()
+		if url.serializeSize() + i >= maxSize:
+			i=maxSize
+			urls.append(url)
+		else :	
+			i		+=url.serializeSize()+1
+			url		= Url.serialize( url )+"~" 
+			bundle	+=url
+	f=open("bundle.log", 'w')
+	f.write(bundle)
+	f.close()
+	return bundle
+
+def makeCacheBundle(cacheHandler, maxSize):
+	bundle = ""
+	urlsSize = cacheHandler.currentRamSize + cacheHandler.currentMemSize
+	i,n = 0,0
 	
-def recordList2list(rL):
-	l=[]
-	for r in rL:
-		l.append( Url( url=r.url ))
+	while i<urlsSize and i<maxSize :
+		url = cacheHandler.get()
+		if url.serializeSize() + i > maxSize:
+			i=maxSize
+			cacheHandler.add(url)
+		else :	
+			i		+=url.serializeSize()+1
+			url		= url.serialize()+"~" 
+			bundle	+=url
+	
+	return bundle
+
+#def recordList2list(rL):
+	#l=[]
+	#for r in rL:
+		#l.append( Url( url=r.url ))
 	
