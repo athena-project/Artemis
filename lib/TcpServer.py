@@ -15,6 +15,11 @@
 #  
 #	@autor Severus21
 #
+import select
+import socket
+import sys
+
+
 
 import time
 
@@ -45,11 +50,76 @@ class TcpServer:
 		
 		
 	
+	def listen(self): # http://pymotw.com/2/select/
+		# Sockets from which we expect to read
+		inputs = [ self.sock ]
+
+		# Sockets to which we expect to write
+		outputs = [ ]
+		
+		while inputs:
+			# Wait for at least one of the sockets to be ready for processing
+			readable, writable, exceptional = select.select(inputs, outputs, inputs)	
+			
+			# Handle inputs
+			for s in readable:
+
+				if s is self.sock:
+					# A "readable" server socket is ready to accept a connection
+					connection, client_address = s.accept()
+					connection.setblocking(0)
+					inputs.append(connection)
+
+				else:
+					buff = s.recv(TcpMsg.T_BUFFER_SIZE)
+					print(buff)
+					if buff:
+						# A readable client socket has data
+						# Add output channel for response
+						if s not in outputs:
+							outputs.append(s)	
+						
+						#data=""
+						#while buff:
+							#data+=buff.decode('utf-8')
+							#buff = s.recv(1024)
+						data=buff.decode('utf-8')
+
+						self.process( data[:TcpMsg.T_TYPE_SIZE], data[TcpMsg.T_TYPE_SIZE:], s.getpeername() )
+					else:
+						# Interpret empty result as closed connection
+						# Stop listening for input on the connection
+						if s in outputs:
+							outputs.remove(s)
+						inputs.remove(s)
+						s.close()
+					
+			# Handle outputs
+			for s in writable:
+				pass
+					
+			# Handle "exceptional conditions"
+			for s in exceptional:
+				# Stop listening for input on the connection
+				inputs.remove(s)
+				if s in outputs:
+					outputs.remove(s)
+				s.close()
+					
+					
+					
+					
+					
+					
+					
+					
+					
+
 	#Data is a string
 	def process(self, type, data, address):
 		pass
 
-	def listen(self):
+	def listen2(self):
 		while True :
 			connectionRequested, wlist, xlist = select.select([self.sock],[], [], 60)
 			

@@ -56,7 +56,9 @@ class UrlManager:
 		cur.execute("INSERT INTO urlrecord (protocol, domain, url, lastMd5, lastVisited) VALUES ('"+record.protocol+
 					"', '"+record.domain+"', '"+record.url+"', '"+record.lastMd5+"', '"+str(record.lastVisited)+"')" )
 		self.con.commit()
+		id = cur.lastrowid
 		cur.close()
+		return id
 		
 	def update(self, record):
 		cur = self.con.cursor()
@@ -73,7 +75,7 @@ class UrlManager:
 		
 class UrlRecord:
 	def __init__(self, id=-1, protocol="", domain="", url="", lastMd5="", lastVisited=0):
-		self.id 			= id
+		self.id 			= int(id)
 		self.protocol		= protocol
 		self.domain 		= domain
 		self.url 			= url
@@ -107,7 +109,6 @@ class Url:
 		
 	def serialize(self):
 		return self.origin+"|"+self.url+"|"+self.type+"|"+self.charset+"|"+self.alt
-
 
 #Static function
 
@@ -166,19 +167,18 @@ def makeBundle(urls, maxSize):
 			i		+=url.serializeSize()+1
 			url		= Url.serialize( url )+"~" 
 			bundle	+=url
-	f=open("bundle.log", 'w')
-	f.write(bundle)
-	f.close()
 	return bundle
 
-def makeCacheBundle(cacheHandler, maxSize):
+def makeCacheBundle(cacheHandler, fValid, manager, delay, maxSize):
 	bundle = ""
 	urlsSize = cacheHandler.currentRamSize + cacheHandler.currentMemSize
 	i,n = 0,0
 	
 	while i<urlsSize and i<maxSize :
 		url = cacheHandler.get()
-		if url.serializeSize() + i > maxSize:
+		if not fValid( url.url, cacheHandler, manager, delay):
+			pass
+		elif url.serializeSize() + i > maxSize:
 			i=maxSize
 			cacheHandler.add(url)
 		else :	

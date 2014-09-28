@@ -17,6 +17,7 @@
 #
 
 import Url
+import os
 
 class UrlCacheHandler:
 	
@@ -90,15 +91,21 @@ class UrlCacheHandler:
 		return elmt
 		
 	def load( self ):
-		iStream = open( self.parentDir+str( self.rId) )
-		buff = ""
-		for line in iStream:
-			buff += line
-		
-		l=Url.unSerializeList( buff )
-		for url in l:
-			seld.data[url.url]=url
-			self.currentRamSize+=url.size()
+		path = self.parentDir+str( self.rId)
+		if( os.path.exists(path) ):
+			iStream = open( path )
+			buff = ""
+			for line in iStream:
+				buff += line
 			
-		self.rId += 1
-		self.currentMemSize -= len(buff)
+			l=Url.unserializeList( buff )
+			for url in l:
+				seld.data[url.url]=url
+				self.currentRamSize+=url.size()
+				
+			self.rId += 1
+			self.currentMemSize -= len(buff)
+			os.remove( path )
+		else:
+			#error
+			pass

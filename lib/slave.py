@@ -15,7 +15,7 @@
 #  
 #	@autor Severus21
 #
-
+# coding: utf-8
 import configparser
 import CrawlerSlave
 

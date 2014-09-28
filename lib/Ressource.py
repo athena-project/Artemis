@@ -22,6 +22,7 @@ class RessourceManager:
 	def __init__(self):
 		self.con = SQLFactory.getConn()
 		self.table	= ""
+		
 	def __del__(self):
 		self.con.close()
 		
@@ -31,7 +32,7 @@ class RessourceManager:
 
 		r=None
 		for row in cur: #url is a unique id
-			r=UrlRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9] )
+			r=RessourceRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9] )
 		cur.close()
 		
 		return r
@@ -42,7 +43,9 @@ class RessourceManager:
 					+"VALUES ('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
 					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.md5+"', '"+str(record.lastUpdate)+"')" )
 		self.con.commit()
+		id = cur.lastrowid
 		cur.close()
+		return id
 		
 	def update(self, record):
 		cur = self.con.cursor()
@@ -62,7 +65,7 @@ class RessourceRecord:
 	"""
 	"""
 	def __init__(self, id=-1, url="", domain="", relatedRessources="", size="", contentTypes="", times="", md5="", lastUpdate=""):
-		self.id 				= id
+		self.id 				= int(id)
 		self.url 				= url
 		self.domain 			= domain
 		self.relatedRessources 	= relatedRessources
@@ -70,9 +73,9 @@ class RessourceRecord:
 		self.contentTypes 		= contentTypes
 		self.times 				= times
 		self.md5 				= md5
-		self.lastUpdate 		= lastUpdate
+		self.lastUpdate 		= float(lastUpdate)
 
-class Ressource( ):
+class Ressource:
 	"""
 	"""
 	def __init__(self):
@@ -91,17 +94,19 @@ class Ressource( ):
 		self.data = ""
 		
 	def hydrate(self, record):
+		if record == None:
+			return 
 		#for key in record.__dict__ :
 			#setattr(self, key, getattr(record, key) )
 		self.id 				= record.id
 		self.url				= record.url
 		self.domain				= record.domain
 			
-		self.relatedRessources	= unserializeTupleList( record.relatedRessources )
-		self.sizes				= unserialiseSimpleList( record.sizes )
-		self.contentTypes		= unserialiseSimpleList( record.contentTypes )
-		self.times				= unserialiseSimpleList( record.times )
-		self.md5				= unserialiseSimpleList( record.md5 )
+		self.relatedRessources	= self.unserializeTupleList( record.relatedRessources )
+		self.sizes				= self.unserialiseSimpleList( record.sizes )
+		self.contentTypes		= self.unserialiseSimpleList( record.contentTypes )
+		self.times				= self.unserialiseSimpleList( record.times )
+		self.md5				= self.unserialiseSimpleList( record.md5 )
 		
 		self.lastUpdate			= record.lastUpdate
 	
@@ -154,60 +159,28 @@ class Ressource( ):
 			l.append( self.unserializeTuple( x , f1, f2) )
 		return l
 	
-	#def getById(id):
-		#try:
-			#record = RessourceRecord.get( RessourceRecord.id == id )
-			#r = Ressource()
-			##Decorateur ?
-			#r.hydrate( record ) 
-		#except peewee.DoesNotExists:
-			#return None
+	def getRecord(self):
+		return RessourceRecord(
+			id					= self.id
+			url					= self.url
+			domain				= self.domain
 			
-	#def getByUrl(url):
-		#try:
-			#record = RessourceRecord.get( RessourceRecord.url == url )
-			#r = Ressource()
-			##Decorateur ?
-			#r.hydrate( record ) 
-		#except peewee.DoesNotExists:
-			#return None
+			relatedRessources	= self.serializeTupleList( self.relatedRessources )
+			sizes				= self.serializeSimpleList( self.sizes )
+			contentTypes		= self.serializeSimpleList( self.contentTypes )
+			times				= self.serializeSimpleList( self.times )
+			md5					= self.serializeSimpleList( self.md5 )
+			
+			lastUpdate			= self.lastUpdate
+		)
 	
-	#def save(self):
-		##save on disk
-		#exits = False
+class RessourceHandler:
+	def __init__(self, manager):
+		self.manager	= manager
+	
+	def save(self, ressource):
+		#SQl
+		self.manager.insert( ressource.getRecord() )
 		
-		#if( self.id == -1):
-			#try:
-				#RessourceRecord.get( RessourceRecord.url == self.url )
-			#except peewee.DoesNotExists:
-				#pass
-			#else:
-				#exists = True
-		#else:
-			#exists = True
-		
-		#if( exists ):
-			#record = RessourceRecord( id			= self.id,	
-								 #url				= self.url,
-								 #domain				= self.domain,
-								 #relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
-								 #sizes				= self.serializeSimpleList(self.sizes, int),
-								 #contentTypes		= self.serializeSimpleList(self.contentTypes, str),
-								 #times				= self.serializeSimpleList(self.times, int),
-								 #md5				= self.serializeSimpleList(self.md5, str),
-								 #chunks				= self.serializeSimpleList(self.chunks, int),
-								 #lastUpdate			= self.lastUpdate
-								#)
-		#else:
-			#record = RessourceRecord(url			= self.url,
-								 #domain				= self.domain,
-								 #relatedRessources	= self.serializeSimpleList(self.relatedRessources, str, int),
-								 #sizes				= self.serializeSimpleList(self.sizes, int),
-								 #contentTypes		= self.serializeSimpleList(self.contentTypes, str),
-								 #times				= self.serializeSimpleList(self.times, int),
-								 #md5				= self.serializeSimpleList(self.md5, str),
-								 #chunks				= self.serializeSimpleList(self.chunks, int),
-								 #lastUpdate			= self.lastUpdate
-								#)
-		#record.save()
+		#Data		
 		

@@ -16,13 +16,7 @@
 #	@autor Severus21
 #
 
-#import TcpServer
-
-
-#t =TcpServer.TcpServer( 1645 )
-#t.initNetworking()
-#t.listen()
-
+# coding: utf-8
 import configparser
 import Url
 import CrawlerMaster 
@@ -48,6 +42,9 @@ master = CrawlerMaster.Master(
 	delay 			= int( config['Update']['delay'] ),
 	nSqlUrls		= int( config['Update']['nSqlUrls'] ),
 	nMemUrls		= int( config['Update']['nMemUrls'] ),
+	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
+	maxMemSize		= int( config['UrlHandling']['maxMemSize'] ),
+	parentDir		= config['UrlHandling']['parentDir']
 )
 for url in config['Gateway']:
 	master.urlCacheHandler.add( Url.Url(url="http://"+url) )

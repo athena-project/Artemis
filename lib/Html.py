@@ -72,6 +72,14 @@ class HtmlManager(TextManager):
 		TextManager.__init__(self)
 		self.table		= "html"
 
+class HtmlRecord( TextRecord ):
+	def __init__(self):
+		TextRecord.__init__(self)
+		
+class HtmlHandler( TextHandler ):
+	def __init__(self, manager):
+		TextHandler.__init__(self, manager)
+		
 class Html( Text ):
 	"""
 	"""

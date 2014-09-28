@@ -50,12 +50,33 @@ class MasterThread( Thread ):
 		while True:
 			for slaveAdress in self.slavesAvailable:
 				t = TcpClient( slaveAdress, self.cPort )
-				t = TcpClient( slaveAdress, self.cPort )
-				t.send( TcpMsg.T_URL_TRANSFER + 
-						Url.makeCacheBundle(self.urlCacheHandler, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE) )
+				bundle	= Url.makeCacheBundle(self.urlCacheHandler, secondValidUrl, manager, delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
+				
+				t.send( TcpMsg.T_URL_TRANSFER + bundle)
 				self.slavesAvailable.remove( slaveAdress )
 			time.sleep( self.period )
-
+	
+	def secondValidUrl(url, cacheHandler, manager, delay):
+		"""
+			Before sending
+		"""	
+		#Check in ram
+		if( cacheHandler.exists( url ) ):
+			return False
+			
+		try:
+		#Sql check
+			record = manager.getByUrl( url.url )
+			if record != None and (record.lastVisited > time.time()-delay):
+				return False
+		except Exception:
+			f=open("sql.log", "a")
+			f.write(url.url)
+			f.write("\n")
+			return False
+		return True
+	
+	
 	#def update(self):
 		#query = ( UrlRecord.select().
 				#where( UrlRecord.lastVisited < time.time()-self.delay  ).
@@ -95,7 +116,9 @@ class Master( TcpServer ):
 	"""
 	
 	
-	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, domainRules={"*":False}, protocolRules={"*":False}, originRules={"*":False}, delay = 36000, nSqlUrls=100, nMemUrls=100) :
+	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, domainRules={"*":False},
+				protocolRules={"*":False}, originRules={"*":False}, delay = 36000, nSqlUrls=100, nMemUrls=100,
+				maxRamSize=100, maxMemSize=1000, parentDir="") :
 		"""
 			@domainRules			- domain => true ie allowed False forbiden *=>all
 			@param maxMemRobots		- maximun of robot.txt ept in disk cache
@@ -118,9 +141,15 @@ class Master( TcpServer ):
 		self.nSqlUrls			= nSqlUrls#number of sql url per update block
 		self.nMemUrls			= nMemUrls
 		
-		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler()
+		self.maxRamSize			= maxRamSize
+		self.maxMemSize			= maxMemSize
+		self.parentDir			= parentDir
+		
+		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler(self.maxRamSize, self.maxMemSize, self.parentDir)
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 		
+		
+		self.manager 			= Url.UrlManager()
 		self.initNetworking()
 	
 	def crawl(self):
@@ -140,8 +169,6 @@ class Master( TcpServer ):
 		
 	### Network ###
 	def process(self, type, data, address):
-		print("processing"+str(type))
-		
 		if type == TcpMsg.T_DONE:
 			pass
 			
@@ -153,7 +180,10 @@ class Master( TcpServer ):
 	
 	
 	### Url Handling ###
-	def validUrl(self, url):
+	def firstValidUrl(self, url):
+		"""
+			Before adding to cache
+		"""
 		#Check in ram
 		if( self.urlCacheHandler.exists( url ) ):
 			return False
@@ -184,14 +214,13 @@ class Master( TcpServer ):
 		robot = self.robotCacheHandler.get( urlP.scheme+"://"+urlP.netloc )
 		if robot != None and not robot.can_fetch(self.useragent , url.url):
 			return False
-			
+		
 		return True
-			
+		
 	def addUrls(self, data ):
-		print("adding",len(data) )
 		urls = Url.unserializeList( data[1:] )
 		for url in urls :
-			if self.validUrl( url ):
+			if self.firstValidUrl( url ):
 				self.urlCacheHandler.add( url ) 
 			else:
 				pass

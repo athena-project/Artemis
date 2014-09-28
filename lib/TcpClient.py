@@ -70,6 +70,6 @@ class TcpClient:
 		self.sock.close()
 		
 		#End 
-		self.initNetworking()
-		self.sock.send(  TcpMsg.T_DONE.encode() )
-		self.sock.close()
+		#self.initNetworking()
+		#self.sock.send(  TcpMsg.T_DONE.encode() )
+		#self.sock.close()

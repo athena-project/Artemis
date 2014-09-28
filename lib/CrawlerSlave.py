@@ -65,13 +65,33 @@ class WorkerThread( Thread ):
 			#log
 			
 	def http( self, url, urlObj, urlRecord ):
-		t1 = time.time()
-		r = request.urlopen( str(url.url) )	
-		print( time.time()-t1)
+		print("under way")
+		try:
+			r = request.urlopen( url.url )	
+		except :
+			#log
+			return
 		#ContentType 
 		cT = r.getheader("Content-Type")
-		cTl=cT.split(";")
+
+		#Statut check
+		if( r.status != 200 ):
+			return 
+			
+		self.save(url, urlObj, urlRecord, cT, r.read())
 		
+		
+	
+	#def ftp( self, url):
+	#	r = request.urlopen( url)	
+	#	if( r.status == 200 ):
+	#		
+	#	else:
+	#		#log
+	
+	def save(self, url, urlObj, urlRecord, cT, data):
+		#ContentType parsing
+		cTl=cT.split(";")
 		contentType	= cTl[0].strip()
 		charset		= "UTF-8"
 		if len(cT)>1:
@@ -81,78 +101,73 @@ class WorkerThread( Thread ):
 			else:
 				charset = charset[0].strip()
 		
-		#Statut check
-		if( r.status != 200 ):
-			#log
-			return 
-		
 		##Chek contentType
 		if contentType in self.contentTypes:
 			if not self.contentTypes[contentType]:
-				return False
+				return 
 		elif not self.contentTypes["*"]:
-				return False
-			
-			
-		if contentType not in contentTypeRules:
+			return 
+		elif contentType not in contentTypeRules:
 			#log
-			pass
-		else:
-			ressourceManager	= contentTypeRules[ contentType ][1]()
-			ressource 			= ressourceManager.getByUrl( url=url.url )
-			t 					= time.time()
-			data 				= r.read()
+			return 
 
-			#Md5
-			m_md5 = hashlib.md5()
-			m_md5.update(data)
-			h_md5 = m_md5.hexdigest()
-			
-			data				= data.decode(charset.lower())
-			
-			if ressource == None:
-				ressource = contentTypeRules[ contentType ][0]()
-				ressource.url					= url.url
-				ressource.domain				= urlObj.netloc
-				ressource.data					= data
-			else:
-				if h_md5 == ressource.md5[-1]:
-					ressource.data				= data
-				
-				ressource.size.append( 			len(data ) )
-				ressource.contentTypes.append( 	cT ) 
-				ressource.times.append( 		time.time() )
-				ressource.md5.append( 			h_md5  )
-				ressource.lastUpdate			= t
-			
-			ressource.sizes.append(			len(data ) ) 
-			ressource.contentTypes.append( 	cT ) 
-			ressource.times.append( 		time.time() )
-			ressource.md5.append(	 		h_md5  )
-			ressource.lastUpdate			= t
-				
-			#url maj
-			if urlRecord == None:
-				urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
-			else:
-				urlRecord.lastMd5		= h_md5
-				urlRecord.lastVisited	= t
-			
-			self.manager.save(urlRecord)
-			ressource.save()	
-			
-			#Feed the slave with the links owned by the current ressource
-			self.newUrls.extend( ressource.extractUrls( urlObj ) )
+		ressourceHandler	= contentTypeRules[ contentType ][1]
+		ressourceRecord		= ressourceHandler.manager.getByUrl( url=url.url )
+		ressource			= contentTypeRules[ contentType ][0]().hydrate( ressourceRecord )
+		t 					= time.time()
+
+		#Hash
+		m_md5 = hashlib.md5()
+		m_md5.update(data)
+		h_md5 = m_md5.hexdigest()
 		
+		data				= str(data.decode(charset.lower()))
+			
+		#UrlRecord hydrating
+		if urlRecord == None:
+			urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
+		urlRecord.lastMd5		= h_md5
+		urlRecord.lastVisited	= t
+		
+		self.manager.save( urlRecord )
+		
+		#hash traitement
+		à faire
+		
+		
+		#Ressource hydrating
+		ressource.url					= url.url
+		ressource.domain				= urlObj.netloc
+		ressource.sizes.append(			len(data ) ) 
+		ressource.contentTypes.append( 	cT ) 
+		ressource.times.append( 		time.time() )
+		ressource.md5.append(	 		h_md5  )
+		ressource.lastUpdate			= t
+		if h_md5 == ressource.md5[-1]:
+			ressource.data				= data
 	
-	#def ftp( self, url):
-	#	r = request.urlopen( url)	
-	#	if( r.status == 200 ):
-	#		
-	#	else:
-	#		#log
-			
-			
+		ressourceHandler.save( ressource )	
+		
+		#Feed the slave with the links owned by the current ressource
+		self.newUrls.extend( ressource.extractUrls( urlObj ) )
+		
+class UrlSender( Thread ):
+	def __init__(self, masterAddress, cPort, newUrls):
+		Thread.__init__(self)
+		self.masterAddress	= masterAddress
+		self.cPort			= cPort
+		self.newUrls		= newUrls
+	
+	def run(self):
+		while True:
+			if self.newUrls :
+				print("sending")
+				t = TcpClient( self.masterAddress, self.cPort )
+				t.send( TcpMsg.T_URL_TRANSFER + 
+					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
+			time.sleep(2)
+							
+		
 class OverseerThread( Thread ):
 	def __init__(self, masterAddress, useragent, cPort, maxWorkers, period, urls, contentTypes, delay):
 		Thread.__init__(self)
@@ -171,7 +186,8 @@ class OverseerThread( Thread ):
 		self.contentTypes	= contentTypes
 		self.delay			= delay
 		
-		self.urlsLock = RLock()
+		self.urlsLock 		= RLock()
+		self.sender			= UrlSender( self.masterAddress, self.cPort, self.newUrls )
 		
 	def pruneWorkers(self):
 		for worker in self.workers:
@@ -179,15 +195,19 @@ class OverseerThread( Thread ):
 				self.aliveWorkers -=1
 				del worker
 	
+	
 	def harness(self):
 		if not self.urls:
 				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_PENDING )
-				
+		
+		self.sender.start()
+		
 		while self.urls :
 			n = self.maxWorkers-self.aliveWorkers
 			if n>0 :
 				i=0
+				
 				while i<n :
 					w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
 										contentTypes=self.contentTypes, delay=self.delay )
@@ -195,17 +215,15 @@ class OverseerThread( Thread ):
 					self.aliveWorkers += 1
 					w.start()
 					i+=1
+					
 			
 			time.sleep( self.period ) 
 			self.pruneWorkers()
-		print("begin sending")
-		while self.newUrls:
-			t = TcpClient( self.masterAddress, self.cPort )
-			t.send( TcpMsg.T_URL_TRANSFER + 
-					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
-		print("end")
+		
+
 		t = TcpClient( self.masterAddress, self.cPort )
 		t.send( TcpMsg.T_PENDING )
+		
 	def run(self):
 		self.harness()		
 	

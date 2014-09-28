@@ -36,7 +36,9 @@ class TextManager( RessourceManager):
 					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.md5+"', '"+record.lastUpdate
 					+"', '"+record.chunks+"', '"+record.revision+"')" )
 		self.con.commit()
+		id = cur.lastrowid
 		cur.close()
+		return id
 		
 	def update(self, record):
 		cur = self.con.cursor()
@@ -51,8 +53,9 @@ class TextManager( RessourceManager):
 class TextRecord( RessourceRecord ):
 	def __init__(self, id=-1, url="", domain="", relatedRessources="", size="", contentTypes="", times="", md5="", lastUpdate="", 
 	chunks="", revision=""):
-		RessourceRecord.__init__(id, url, domain, relatedRessources, size, contentTypes, times, md5, chunks, lastUpdate)
-		self.revision = revision
+		RessourceRecord.__init__(id, url, domain, relatedRessources, size, contentTypes, times, md5, lastUpdate)
+		self.chunks		= chunks
+		self.revision 	= int(revision)
 
 
 class Text( Ressource ):
@@ -61,55 +64,48 @@ class Text( Ressource ):
 	
 	def __init__(self):
 		Ressource.__init__(self)
-		self.revision = 0 #number of revision
+		self.chunks		= []
+		self.revision  	= 0 #number of revision
 
-	def newRev(self):
-		if( hashlib.md5(self.data).hexdigest() == self.md5[ self.md5.count()-1 ] ):
-			pass
-		else:
-			pass
-			#newrev c++
+	def hydrate(self, record):
+		if record == None:
+			return 
 		
+		Ressource.hydrate(self, record)
+		self.chunks		= self.unserialiseSimpleList( record.chunks )
+		self.revision	= record.revision()
+	
+	def getRecord(self):
+		
+		return TextRecord(
+			id					= self.id
+			url					= self.url
+			domain				= self.domain
+			
+			relatedRessources	= self.serializeTupleList( self.relatedRessources )
+			sizes				= self.serializeSimpleList( self.sizes )
+			contentTypes		= self.serializeSimpleList( self.contentTypes )
+			times				= self.serializeSimpleList( self.times )
+			md5					= self.serializeSimpleList( self.md5 )
+			
+			lastUpdate			= self.lastUpdate
+			
+			chuncks				= self.serializeSimpleList( self.chunks )
+			revision			= self.revision
+		)
+	
 
-	def save(self):
-		exits = False
-		
-		#newRev()
-		#if( self.id == -1):
-			#try:
-				#RessourceRecord.get( RessourceRecord.url == self.url )
-			#except peewee.DoesNotExists:
-				#pass
-			#else:
-				#exists = True
-		#else:
-			#exists = True
-		
-		#if( exists ):
-			#record = RessourceRecord( id			= self.id,	
-								 #url				= self.url,
-								 #domain				= self.domain,
-								 #relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
-								 #sizes				= self.serializeSimpleList(self.sizes, int),
-								 #contentTypes		= self.serializeSimpleList(self.contentTypes, str),
-								 #times				= self.serializeSimpleList(self.times, int),
-								 #md5				= self.serializeSimpleList(self.md5, str),
-								 #chunks				= self.serializeSimpleList(self.chunks, int),
-								 #lastUpdate			= self.lastUpdate,
-								 #revision			= self.revision
-								#)
-		#else:
-			#record = RessourceRecord(url			= self.url,
-								 #domain				= self.domain,
-								 #relatedRessources	= self.serializeTupleList(self.relatedRessources, str, int),
-								 #sizes				= self.serializeSimpleList(self.sizes, int),
-								 #contentTypes		= self.serializeSimpleList(self.contentTypes, str),
-								 #times				= self.serializeSimpleList(self.times, int),
-								 #md5				= self.serializeSimpleList(self.md5, str),
-								 #chunks				= self.serializeSimpleList(self.chunks, int),
-								 #lastUpdate			= self.lastUpdate,
-								 #revision			= self.revision
-								#)
-		#record.save()
 
+class TextHandler:
+	def __init__(self, manager):
+		RessourceHandler.__init__(self, manager)
+	
+	def save(self, text):
+		#SQl
+		id = self.manager.insert( text.getRecord() )
 		
+		#Data		
+		if( text.data() ):
+			f = open( "save/text/"+id, "w")
+			f.write( text.data )
+			f.close()

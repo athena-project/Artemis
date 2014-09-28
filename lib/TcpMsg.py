@@ -31,9 +31,9 @@ class TcpMsg:
 	T_RESEND			= '7'
 	T_RESEND_SIZE		= 0
 	T_URL_TRANSFER		= '8'
-	T_URL_TRANSFER_SIZE	= 4096
+	T_URL_TRANSFER_SIZE	= 8192
 	
-	T_BUFFER_SIZE		= 4096
+	T_BUFFER_SIZE		= 16384
 	
 	def getSize( s ):
 		if s == TcpMsg.T_ACCEPTED:
