@@ -1,4 +1,20 @@
 --
+-- Table structure for table `hash`
+--
+
+DROP TABLE IF EXISTS `hash`;
+
+CREATE TABLE `hash` (
+  `id` BIGINT(11) NOT NULL AUTO_INCREMENT,
+  `hash` varchar(128), 
+  `rType` varchar(2),
+  PRIMARY KEY (`id`),
+  KEY key_hash (`hash`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
+
+
+--
 -- Table structure for table `urlrecord`
 --
 

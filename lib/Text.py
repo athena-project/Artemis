@@ -22,6 +22,8 @@ import SQLFactory
 import hashlib
 import time
 
+import libpyRessource
+
 
 class TextManager( RessourceManager):
 	def __init__(self):
@@ -102,10 +104,20 @@ class TextHandler:
 	
 	def save(self, text):
 		#SQl
-		id = self.manager.insert( text.getRecord() )
-		
+		if( text.id == -1)
+			text.id = self.manager.insert( text.getRecord() )
+		else:
+			self.manager.save( text.getRecord() )
+			
 		#Data		
-		if( text.data() ):
-			f = open( "save/text/"+id, "w")
-			f.write( text.data )
-			f.close()
+		#if( text.data() ):
+			#f = open( "save/text/"+id, "w")
+			#f.write( text.data )
+			#f.close()
+		cRessource	= libpyRessource.Ressource()
+		cRessource.setId( text.id )
+		cRessource.setCurrentRevision( text.revision )
+		cRessource.setChunkIds( text.chunks )
+		
+		cRessourceHandler = libpyRessource.RessourceHandler()
+		cRessourceHandler.newRevision(cRessource, text.data)

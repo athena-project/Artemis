@@ -16,28 +16,33 @@
 #	@autor Severus21
 #
 # coding: utf-8
-import configparser
-import CrawlerSlave
 
-def configDict2boolDict(cDict):
-	d={}
-	for key in cDict:
-		d[key]=cDict.getboolean(key)
-	return d
+import libpyRessource
+
+print( libpyRessource.troll() )
+
+#import configparser
+#import CrawlerSlave
+
+#def configDict2boolDict(cDict):
+	#d={}
+	#for key in cDict:
+		#d[key]=cDict.getboolean(key)
+	#return d
 
 
-config = configparser.ConfigParser()
-config.read('../conf/slave.ini')
+#config = configparser.ConfigParser()
+#config.read('../conf/slave.ini')
 
-s=CrawlerSlave.Slave(
-	masterAddress	= config['General']['masterAddress'],
-	useragent		= config['General']['useragent'], 
-	cPort			= int( config['General']['cPort'] ), 
-	port			= int( config['General']['sPort'] ), 
-	period			= int( config['General']['period'] ), 
-	maxWorkers		= int( config['Thread']['maxWorkers'] ),
-	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
-	delay			= int( config['Update']['delay'] )
-)
+#s=CrawlerSlave.Slave(
+	#masterAddress	= config['General']['masterAddress'],
+	#useragent		= config['General']['useragent'], 
+	#cPort			= int( config['General']['cPort'] ), 
+	#port			= int( config['General']['sPort'] ), 
+	#period			= int( config['General']['period'] ), 
+	#maxWorkers		= int( config['Thread']['maxWorkers'] ),
+	#contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
+	#delay			= int( config['Update']['delay'] )
+#)
 
-s.harness()
+#s.harness()
