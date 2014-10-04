@@ -32,7 +32,7 @@ class RessourceManager:
 
 		r=None
 		for row in cur: #url is a unique id
-			r=RessourceRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9] )
+			r=RessourceRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8] )
 		cur.close()
 		
 		return r
@@ -64,7 +64,7 @@ class RessourceManager:
 class RessourceRecord:
 	"""
 	"""
-	def __init__(self, id=-1, url="", domain="", relatedRessources="", size="", contentTypes="", times="", md5="", lastUpdate=""):
+	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", md5="", lastUpdate=""):
 		self.id 				= int(id)
 		self.url 				= url
 		self.domain 			= domain
@@ -102,11 +102,11 @@ class Ressource:
 		self.url				= record.url
 		self.domain				= record.domain
 			
-		self.relatedRessources	= self.unserializeTupleList( record.relatedRessources )
-		self.sizes				= self.unserialiseSimpleList( record.sizes )
-		self.contentTypes		= self.unserialiseSimpleList( record.contentTypes )
-		self.times				= self.unserialiseSimpleList( record.times )
-		self.md5				= self.unserialiseSimpleList( record.md5 )
+		self.relatedRessources	= self.unserializeTupleList( record.relatedRessources, str, int )
+		self.sizes				= self.unserialiseSimpleList( record.sizes, int)
+		self.contentTypes		= self.unserialiseSimpleList( record.contentTypes, str)
+		self.times				= self.unserialiseSimpleList( record.times, float)
+		self.md5				= self.unserialiseSimpleList( record.md5, str )
 		
 		self.lastUpdate			= record.lastUpdate
 	
@@ -125,7 +125,7 @@ class Ressource:
 		end=0
 		i=0
 		n=len(s)
-		while i<s :
+		while i<n :
 			if( s[i] == ":" ):
 				end = i-1
 				l.append( f(s[begin, end]) )
@@ -153,23 +153,24 @@ class Ressource:
 		return( f1(a),f2(b) )
 		
 	def unserializeTupleList(self, s, f1, f2):
+		def identity (x): return x
 		l  = []
-		tmpL = self.unserialiseSimpleList(s)
+		tmpL = self.unserialiseSimpleList(s, identity)
 		for x in tmpL:
 			l.append( self.unserializeTuple( x , f1, f2) )
 		return l
 	
 	def getRecord(self):
 		return RessourceRecord(
-			id					= self.id
-			url					= self.url
-			domain				= self.domain
+			id					= self.id,
+			url					= self.url,
+			domain				= self.domain,
 			
-			relatedRessources	= self.serializeTupleList( self.relatedRessources )
-			sizes				= self.serializeSimpleList( self.sizes )
-			contentTypes		= self.serializeSimpleList( self.contentTypes )
-			times				= self.serializeSimpleList( self.times )
-			md5					= self.serializeSimpleList( self.md5 )
+			relatedRessources	= self.serializeTupleList( self.relatedRessources ),
+			sizes				= self.serializeSimpleList( self.sizes ),
+			contentTypes		= self.serializeSimpleList( self.contentTypes ),
+			times				= self.serializeSimpleList( self.times ),
+			md5					= self.serializeSimpleList( self.md5 ),
 			
 			lastUpdate			= self.lastUpdate
 		)

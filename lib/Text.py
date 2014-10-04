@@ -31,12 +31,23 @@ class TextManager( RessourceManager):
 		self.table		= "text"
 		
 	
+	def getByUrl(self, url):
+		cur = self.con.cursor()
+		cur.execute("SELECT * FROM "+self.table+" WHERE url='"+url+"'")
+
+		r=None
+		for row in cur: #url is a unique id
+			r=TextRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10] )
+		cur.close()
+		
+		return r
+	
 	def insert(self, record):
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, md5, lastUpdate)"
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, md5, lastUpdate, chunks, revision)"
 					+"VALUES ('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
-					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.md5+"', '"+record.lastUpdate
-					+"', '"+record.chunks+"', '"+record.revision+"')" )
+					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.md5+"', '"+str(record.lastUpdate)
+					+"', '"+record.chunks+"', '"+str(record.revision)+"')" )
 		self.con.commit()
 		id = cur.lastrowid
 		cur.close()
@@ -46,16 +57,16 @@ class TextManager( RessourceManager):
 		cur = self.con.cursor()
 		cur.execute("UPDATE urlRecord SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
 					"', sizes:='"+record.sizes+"', contentTypes:='"+record.contentTypes+"', times:='"+record.times+
-					+"', md5:='"+record.md5+"', lastUpdate:='"+record.lastUpdate+"', chunks:='"+record.chunks
-					+"', revision:='"+record.revision+"' WHERE id='"+str(record.id)+"'" )
+					+"', md5:='"+record.md5+"', lastUpdate:='"+str(record.lastUpdate)+"', chunks:='"+record.chunks
+					+"', revision:='"+str(record.revision)+"' WHERE id="+str(record.id)+"" )
 		self.con.commit()
 		cur.close()
 		
 
 class TextRecord( RessourceRecord ):
-	def __init__(self, id=-1, url="", domain="", relatedRessources="", size="", contentTypes="", times="", md5="", lastUpdate="", 
+	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", md5="", lastUpdate="", 
 	chunks="", revision=""):
-		RessourceRecord.__init__(id, url, domain, relatedRessources, size, contentTypes, times, md5, lastUpdate)
+		RessourceRecord.__init__(self, id, url, domain, relatedRessources, sizes, contentTypes, times, md5, lastUpdate)
 		self.chunks		= chunks
 		self.revision 	= int(revision)
 
@@ -74,25 +85,25 @@ class Text( Ressource ):
 			return 
 		
 		Ressource.hydrate(self, record)
-		self.chunks		= self.unserialiseSimpleList( record.chunks )
-		self.revision	= record.revision()
+		self.chunks		= self.unserialiseSimpleList( record.chunks, int )
+		self.revision	= int(record.revision)
 	
 	def getRecord(self):
-		
+		print( type(self.serializeSimpleList( self.chunks )))
 		return TextRecord(
-			id					= self.id
-			url					= self.url
-			domain				= self.domain
+			id					= self.id,
+			url					= self.url,
+			domain				= self.domain,
 			
-			relatedRessources	= self.serializeTupleList( self.relatedRessources )
-			sizes				= self.serializeSimpleList( self.sizes )
-			contentTypes		= self.serializeSimpleList( self.contentTypes )
-			times				= self.serializeSimpleList( self.times )
-			md5					= self.serializeSimpleList( self.md5 )
+			relatedRessources	= self.serializeTupleList( self.relatedRessources),
+			sizes				= self.serializeSimpleList( self.sizes),
+			contentTypes		= self.serializeSimpleList( self.contentTypes),
+			times				= self.serializeSimpleList( self.times),
+			md5					= self.serializeSimpleList( self.md5),
 			
-			lastUpdate			= self.lastUpdate
+			lastUpdate			= self.lastUpdate,
 			
-			chuncks				= self.serializeSimpleList( self.chunks )
+			chunks				= self.serializeSimpleList( self.chunks),
 			revision			= self.revision
 		)
 	
@@ -104,20 +115,16 @@ class TextHandler:
 	
 	def save(self, text):
 		#SQl
-		if( text.id == -1)
+		if( text.id == -1):
 			text.id = self.manager.insert( text.getRecord() )
 		else:
 			self.manager.save( text.getRecord() )
 			
 		#Data		
-		#if( text.data() ):
-			#f = open( "save/text/"+id, "w")
-			#f.write( text.data )
-			#f.close()
 		cRessource	= libpyRessource.Ressource()
 		cRessource.setId( text.id )
 		cRessource.setCurrentRevision( text.revision )
-		cRessource.setChunkIds( text.chunks )
+		cRessource.setChunkIdsFromList( text.chunks )
 		
 		cRessourceHandler = libpyRessource.RessourceHandler()
 		cRessourceHandler.newRevision(cRessource, text.data)

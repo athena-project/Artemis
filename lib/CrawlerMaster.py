@@ -32,7 +32,7 @@ from threading import Thread, RLock
 class MasterThread( Thread ):
 	ACTION_CRAWL	= 0
 	ACTION_UPDATE	= 1
-	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, nSqlUrls, nMemUrls ):
+	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, nSqlUrls, nMemUrls,delay ):
 		Thread.__init__(self)
 		
 		
@@ -45,12 +45,17 @@ class MasterThread( Thread ):
 		self.nSqlUrls			= nSqlUrls
 		self.nMemUrls			= nMemUrls
 		self.period				= period			
+		self.delay				= delay
+		
+		self.manager 			= Url.UrlManager()
+
 	
 	def crawl(self):
 		while True:
 			for slaveAdress in self.slavesAvailable:
 				t = TcpClient( slaveAdress, self.cPort )
-				bundle	= Url.makeCacheBundle(self.urlCacheHandler, secondValidUrl, manager, delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
+				bundle	= Url.makeCacheBundle(self.urlCacheHandler, MasterThread.secondValidUrl, self.manager,
+												self.delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
 				
 				t.send( TcpMsg.T_URL_TRANSFER + bundle)
 				self.slavesAvailable.remove( slaveAdress )
@@ -64,45 +69,17 @@ class MasterThread( Thread ):
 		if( cacheHandler.exists( url ) ):
 			return False
 			
-		try:
-		#Sql check
-			record = manager.getByUrl( url.url )
-			if record != None and (record.lastVisited > time.time()-delay):
-				return False
-		except Exception:
-			f=open("sql.log", "a")
-			f.write(url.url)
-			f.write("\n")
-			return False
+		#try:
+		##Sql check
+			#record = manager.getByUrl( url.url )
+			#if record != None and (record.lastVisited > time.time()-delay):
+				#return False
+		#except Exception:
+			#f=open("sql.log", "a")
+			#f.write(url.url)
+			#f.write("\n")
+			#return False
 		return True
-	
-	
-	#def update(self):
-		#query = ( UrlRecord.select().
-				#where( UrlRecord.lastVisited < time.time()-self.delay  ).
-				#order_by( UrlRecord.id).
-				#paginate(1, self.nSqlUrls)
-			   #)
-			  
-		#urls = Url.recordList2list( query.get() )
-		#i = 0
-		
-		#while urls | (not self.urlCacheHandler.empty()) :
-			#for slave in self.slavesAvailable:
-				#if urls :
-					#bundle = self.makeBundleFromRecordList( urls )
-				#else:
-					#bundle = self.makeBundle()
-					#i+=
-					
-				#t = TcpClient.TcpClient( slave, self.cPort )
-				#t.send( TcpMsg.T_URL_TRANSFER+bundle )
-				#self.slavesAvailable.remove( slave )
-				
-				#if i>self.nMemUrls :
-					#i=0
-					#urls = Url.recordList2list( query.get() )
-			#sleep( self.period )
 	
 	def run(self):
 		if self.action == MasterThread.ACTION_CRAWL:
@@ -149,20 +126,21 @@ class Master( TcpServer ):
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 		
 		
-		self.manager 			= Url.UrlManager()
 		self.initNetworking()
 	
 	def crawl(self):
 		master = MasterThread( action = MasterThread.ACTION_CRAWL, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
-								period = self.period, nSqlUrls = self.nSqlUrls, nMemUrls = self.nMemUrls)
+								period = self.period, nSqlUrls = self.nSqlUrls, nMemUrls = self.nMemUrls,
+								delay = self.delay)
 		master.start()
 		self.listen()
 
 	def update(self):
 		master = MasterThread( action = MasterThread.ACTION_UPDATE, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
-								period = self.period, nSqlUrls = self.nSqlUrls, nMemUrls = self.nMemUrls)
+								period = self.period, nSqlUrls = self.nSqlUrls, nMemUrls = self.nMemUrls,
+								delay = self.delay)
 		master.start()
 		
 		self.listen()

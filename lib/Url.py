@@ -176,7 +176,7 @@ def makeCacheBundle(cacheHandler, fValid, manager, delay, maxSize):
 	
 	while i<urlsSize and i<maxSize :
 		url = cacheHandler.get()
-		if not fValid( url.url, cacheHandler, manager, delay):
+		if not fValid( url, cacheHandler, manager, delay):
 			pass
 		elif url.serializeSize() + i > maxSize:
 			i=maxSize
@@ -188,8 +188,4 @@ def makeCacheBundle(cacheHandler, fValid, manager, delay, maxSize):
 	
 	return bundle
 
-#def recordList2list(rL):
-	#l=[]
-	#for r in rL:
-		#l.append( Url( url=r.url ))
 	

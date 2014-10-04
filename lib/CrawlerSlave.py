@@ -77,7 +77,7 @@ class WorkerThread( Thread ):
 		#Statut check
 		if( r.status != 200 ):
 			return 
-			
+		
 		self.save(url, urlObj, urlRecord, cT, r.read())
 		
 		
@@ -90,6 +90,7 @@ class WorkerThread( Thread ):
 	#		#log
 	
 	def save(self, url, urlObj, urlRecord, cT, data):
+
 		#ContentType parsing
 		cTl=cT.split(";")
 		contentType	= cTl[0].strip()
@@ -100,7 +101,7 @@ class WorkerThread( Thread ):
 				charset	= charset[1].strip()
 			else:
 				charset = charset[0].strip()
-		
+
 		##Chek contentType
 		if contentType in self.contentTypes:
 			if not self.contentTypes[contentType]:
@@ -113,7 +114,8 @@ class WorkerThread( Thread ):
 
 		ressourceHandler	= contentTypeRules[ contentType ][1]
 		ressourceRecord		= ressourceHandler.manager.getByUrl( url=url.url )
-		ressource			= contentTypeRules[ contentType ][0]().hydrate( ressourceRecord )
+		ressource			= contentTypeRules[ contentType ][0]()
+		ressource.hydrate( ressourceRecord )
 		t 					= time.time()
 
 		#Hash
@@ -122,19 +124,19 @@ class WorkerThread( Thread ):
 		h_md5 = m_md5.hexdigest()
 		
 		data				= str(data.decode(charset.lower()))
-			
+
 		#UrlRecord hydrating
 		if urlRecord == None:
 			urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
 		urlRecord.lastMd5		= h_md5
 		urlRecord.lastVisited	= t
-		
+	
 		self.manager.save( urlRecord )
 		
 		#hash traitement
-		à faire
+		#à faire
 		
-		
+
 		#Ressource hydrating
 		ressource.url					= url.url
 		ressource.domain				= urlObj.netloc
