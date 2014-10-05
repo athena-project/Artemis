@@ -40,11 +40,11 @@ class UrlManager:
 			return r
 		return r
 		
-	def getByMd5(self, md5):
+	def getBysha512(self, sha512):
 		l=[]
 		
 		cur = self.con.cursor()
-		cur.execute("SELECT * FROM urlrecord WHERE md5='"+md5+"'")
+		cur.execute("SELECT * FROM urlrecord WHERE sha512='"+sha512+"'")
 		for row in cur:
 			l.append( UrlRecord( row[0], row[1], row[2], row[3], row[4], row[5] ) )
 		cur.close()
@@ -53,8 +53,8 @@ class UrlManager:
 	
 	def insert(self, record):
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO urlrecord (protocol, domain, url, lastMd5, lastVisited) VALUES ('"+record.protocol+
-					"', '"+record.domain+"', '"+record.url+"', '"+record.lastMd5+"', '"+str(record.lastVisited)+"')" )
+		cur.execute("INSERT INTO urlrecord (protocol, domain, url, lastSha512, lastVisited) VALUES ('"+record.protocol+
+					"', '"+record.domain+"', '"+record.url+"', '"+record.lastSha512+"', '"+str(record.lastVisited)+"')" )
 		self.con.commit()
 		id = cur.lastrowid
 		cur.close()
@@ -63,7 +63,7 @@ class UrlManager:
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE urlrecord SET protocol:='"+record.protocol+"', domain:='"+record.domain+"', url:='"+record.url+
-					"', lastMd5:='"+record.lastMd5+"', lastVisited:='"+str(record.lastVisited)+"' WHERE id='"+str(record.id)+"'" )
+					"', lastSha512:='"+record.lastSha512+"', lastVisited:='"+str(record.lastVisited)+"' WHERE id='"+str(record.id)+"'" )
 		self.con.commit()
 		cur.close()
 		
@@ -74,12 +74,12 @@ class UrlManager:
 			self.insert( record )
 		
 class UrlRecord:
-	def __init__(self, id=-1, protocol="", domain="", url="", lastMd5="", lastVisited=0):
+	def __init__(self, id=-1, protocol="", domain="", url="", lastSha512="", lastVisited=0):
 		self.id 			= int(id)
 		self.protocol		= protocol
 		self.domain 		= domain
 		self.url 			= url
-		self.lastMd5		= lastMd5
+		self.lastSha512		= lastSha512
 		self.lastVisited 	= float( lastVisited )
 		#relatedRessource= peewee.TextField() #type(link to an sql table):id
 

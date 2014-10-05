@@ -30,7 +30,7 @@ import hashlib
 
 
 class WorkerThread( Thread ):
-	def __init__(self, urlsLock=None, urls=[], newUrls=[], contentTypes={"*":False}, delay=86400):
+	def __init__(self, urlsLock=None, urls=[], newUrls=[], contentTypes={"*":False}, delay=86400, manager=None):
 		"""
 		"""
 		Thread.__init__(self)
@@ -39,7 +39,7 @@ class WorkerThread( Thread ):
 		self.newUrls			= newUrls
 		self.contentTypes		= contentTypes 
 		self.delay				= delay
-		self.manager 			= Url.UrlManager()
+		self.manager 			= manager
 	
 	def run(self):
 		while True:
@@ -48,7 +48,7 @@ class WorkerThread( Thread ):
 					return None
 				url = self.urls.pop()
 			#Sql check
-			record = self.manager.getByUrl( url.url )
+				record = self.manager.getByUrl( url.url )
 			if record == None or (record.lastVisited < time.time()-self.delay):
 				self.dispatch( url, record )
 				
@@ -77,9 +77,12 @@ class WorkerThread( Thread ):
 		#Statut check
 		if( r.status != 200 ):
 			return 
-		
-		self.save(url, urlObj, urlRecord, cT, r.read())
-		
+		try:
+			self.save(url, urlObj, urlRecord, cT, r.read())
+		except Exception as e:
+			f=open("svae_slave.log", "a")
+			f.write(str(e))#format( e.strerror))
+			f.close()
 		
 	
 	#def ftp( self, url):
@@ -90,7 +93,7 @@ class WorkerThread( Thread ):
 	#		#log
 	
 	def save(self, url, urlObj, urlRecord, cT, data):
-
+		t = time.time()
 		#ContentType parsing
 		cTl=cT.split(";")
 		contentType	= cTl[0].strip()
@@ -119,16 +122,16 @@ class WorkerThread( Thread ):
 		t 					= time.time()
 
 		#Hash
-		m_md5 = hashlib.md5()
-		m_md5.update(data)
-		h_md5 = m_md5.hexdigest()
+		m_sha512 = hashlib.sha512()
+		m_sha512.update(data)
+		h_sha512 = m_sha512.hexdigest()
 		
 		data				= str(data.decode(charset.lower()))
 
 		#UrlRecord hydrating
 		if urlRecord == None:
 			urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
-		urlRecord.lastMd5		= h_md5
+		urlRecord.lastsha512		= h_sha512
 		urlRecord.lastVisited	= t
 	
 		self.manager.save( urlRecord )
@@ -143,15 +146,17 @@ class WorkerThread( Thread ):
 		ressource.sizes.append(			len(data ) ) 
 		ressource.contentTypes.append( 	cT ) 
 		ressource.times.append( 		time.time() )
-		ressource.md5.append(	 		h_md5  )
+		ressource.sha512.append(	 		h_sha512  )
 		ressource.lastUpdate			= t
-		if h_md5 == ressource.md5[-1]:
+		if h_sha512 == ressource.sha512[-1]:
 			ressource.data				= data
 	
 		ressourceHandler.save( ressource )	
 		
 		#Feed the slave with the links owned by the current ressource
 		self.newUrls.extend( ressource.extractUrls( urlObj ) )
+		t = time.time()-t
+		print(t)
 		
 class UrlSender( Thread ):
 	def __init__(self, masterAddress, cPort, newUrls):
@@ -167,7 +172,7 @@ class UrlSender( Thread ):
 				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_URL_TRANSFER + 
 					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
-			time.sleep(2)
+			time.sleep(1.5)
 							
 		
 class OverseerThread( Thread ):
@@ -191,6 +196,8 @@ class OverseerThread( Thread ):
 		self.urlsLock 		= RLock()
 		self.sender			= UrlSender( self.masterAddress, self.cPort, self.newUrls )
 		
+		self.manager		= Url.UrlManager()
+		
 	def pruneWorkers(self):
 		for worker in self.workers:
 			if not worker.is_alive():
@@ -199,32 +206,34 @@ class OverseerThread( Thread ):
 	
 	
 	def harness(self):
-		if not self.urls:
+		self.sender.start()
+		j=0
+		
+		while True:
+			if not self.urls:
 				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_PENDING )
-		
-		self.sender.start()
-		
-		while self.urls :
-			n = self.maxWorkers-self.aliveWorkers
-			if n>0 :
-				i=0
-				
-				while i<n :
-					w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
-										contentTypes=self.contentTypes, delay=self.delay )
-					self.workers.append( w )
-					self.aliveWorkers += 1
-					w.start()
-					i+=1
-					
-			
+			while self.urls :
+				n = self.maxWorkers-self.aliveWorkers
+				if n>0 :
+					i=0
+					print("nbr connexion here j"+str(j))
+					while i<n :
+						j+1
+						#try :
+						w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
+											contentTypes=self.contentTypes, delay=self.delay, manager=self.manager )
+						self.workers.append( w )
+						self.aliveWorkers += 1
+						w.start()
+						i+=1
+						j+=1
+						#except Exception:
+							#pass
+						
+				time.sleep( self.period ) 
+				self.pruneWorkers()
 			time.sleep( self.period ) 
-			self.pruneWorkers()
-		
-
-		t = TcpClient( self.masterAddress, self.cPort )
-		t.send( TcpMsg.T_PENDING )
 		
 	def run(self):
 		self.harness()		
@@ -270,11 +279,11 @@ class Slave( TcpServer ):
 	
 		if type == TcpMsg.T_URL_TRANSFER:
 			self.addUrls( data )
-			if not self.overseer.is_alive():
-				self.overseer = OverseerThread(masterAddress = self.masterAddress, useragent = self.useragent, cPort = self.cPort,
-												maxWorkers  = self.maxWorkers, period = self.period, urls = self.urls,
-												contentTypes=self.contentTypes, delay=self.delay)
-				self.overseer.start()
+			#if not self.overseer.is_alive():
+				#self.overseer = OverseerThread(masterAddress = self.masterAddress, useragent = self.useragent, cPort = self.cPort,
+												#maxWorkers  = self.maxWorkers, period = self.period, urls = self.urls,
+												#contentTypes=self.contentTypes, delay=self.delay)
+				#self.overseer.start()
 	
 	### CrawlerThread handling ###
 	def addUrls(self, data ):

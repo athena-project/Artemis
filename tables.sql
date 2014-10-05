@@ -25,11 +25,11 @@ CREATE TABLE `urlrecord` (
   `protocol` varchar(256), 
   `domain` varchar(256),
   `url` text(4096),
-  `lastMd5` varchar(256),
+  `lastHas512` varchar(128),
   `lastVisited` double,
   PRIMARY KEY (`id`),
   KEY key_url (`url`(50)),
-  KEY key_lastMd5 (`lastMd5`)
+  KEY key_lastSha512 (`lastSha512`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 --
@@ -46,7 +46,7 @@ CREATE TABLE `html` (
   `sizes` text,
   `contentTypes` text,
   `times` text,
-  `md5` text,
+  `has512` varchar(128),
   `lastUpdate` double,
   `chunks` text,
   `revision` INT,

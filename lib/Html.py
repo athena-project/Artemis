@@ -54,7 +54,7 @@ class HTMLParser( html.parser.HTMLParser ):
 
 		if( t2.scheme =='' ):
 			if( t2.netloc == '' ):
-				url = self.parentUrl.scheme+"://"+self.parentUrl.netloc+"/"
+				url = self.parentUrl.scheme+"://"+self.parentUrl.netloc
 			else:
 				url = self.parentUrl.scheme+"://"+t2.netloc
 		else :

@@ -39,9 +39,9 @@ class RessourceManager:
 	
 	def insert(self, record):
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, md5, lastUpdate)"
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
 					+"VALUES ('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
-					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.md5+"', '"+str(record.lastUpdate)+"')" )
+					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)+"')" )
 		self.con.commit()
 		id = cur.lastrowid
 		cur.close()
@@ -49,9 +49,9 @@ class RessourceManager:
 		
 	def update(self, record):
 		cur = self.con.cursor()
-		cur.execute("UPDATE urlRecord SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
+		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
 					"', sizes:='"+record.sizes+"', contentTypes:='"+record.contentTypes+"', times:='"+record.times+
-					+"', md5:='"+record.md5+"', lastUpdate:='"+str(record.lastUpdate)+"' WHERE id='"+str(record.id)+"'" )
+					+"', sha512:='"+record.sha512+"', lastUpdate:='"+str(record.lastUpdate)+"' WHERE id='"+str(record.id)+"'" )
 		self.con.commit()
 		cur.close()
 		
@@ -64,7 +64,7 @@ class RessourceManager:
 class RessourceRecord:
 	"""
 	"""
-	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", md5="", lastUpdate=""):
+	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", sha512="", lastUpdate=""):
 		self.id 				= int(id)
 		self.url 				= url
 		self.domain 			= domain
@@ -72,7 +72,7 @@ class RessourceRecord:
 		self.sizes 				= sizes
 		self.contentTypes 		= contentTypes
 		self.times 				= times
-		self.md5 				= md5
+		self.sha512 				= sha512
 		self.lastUpdate 		= float(lastUpdate)
 
 class Ressource:
@@ -87,7 +87,7 @@ class Ressource:
 		self.sizes = []
 		self.contentTypes = []
 		self.times = []
-		self.md5 = []
+		self.sha512 = []
 		
 		self.lastUpdate = 0
 		
@@ -106,7 +106,7 @@ class Ressource:
 		self.sizes				= self.unserialiseSimpleList( record.sizes, int)
 		self.contentTypes		= self.unserialiseSimpleList( record.contentTypes, str)
 		self.times				= self.unserialiseSimpleList( record.times, float)
-		self.md5				= self.unserialiseSimpleList( record.md5, str )
+		self.sha512				= self.unserialiseSimpleList( record.sha512, str )
 		
 		self.lastUpdate			= record.lastUpdate
 	
@@ -170,7 +170,7 @@ class Ressource:
 			sizes				= self.serializeSimpleList( self.sizes ),
 			contentTypes		= self.serializeSimpleList( self.contentTypes ),
 			times				= self.serializeSimpleList( self.times ),
-			md5					= self.serializeSimpleList( self.md5 ),
+			sha512					= self.serializeSimpleList( self.sha512 ),
 			
 			lastUpdate			= self.lastUpdate
 		)
