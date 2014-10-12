@@ -114,10 +114,12 @@ class WorkerThread( Thread ):
 		elif contentType not in contentTypeRules:
 			#log
 			return 
-
-		ressourceHandler	= contentTypeRules[ contentType ][1]
-		ressourceRecord		= ressourceHandler.manager.getByUrl( url=url.url )
-		ressource			= contentTypeRules[ contentType ][0]()
+		
+		
+		rType				=  contentTypeRules[ contentType ] 
+		ressourceHandler	= rTypes[ rType ][3]
+		ressourceRecord		= self.managers[].manager.getByUrl( url=url.url )
+		ressource			= rTypes[ rType ][0]()
 		ressource.hydrate( ressourceRecord )
 		t 					= time.time()
 
@@ -148,8 +150,8 @@ class WorkerThread( Thread ):
 		ressource.times.append( 		time.time() )
 		ressource.sha512.append(	 		h_sha512  )
 		ressource.lastUpdate			= t
-		if h_sha512 == ressource.sha512[-1]:
-			ressource.data				= data
+		#if h_sha512 == ressource.sha512[-1]:
+		ressource.data				= data
 	
 		ressourceHandler.save( ressource )	
 		
@@ -173,8 +175,22 @@ class UrlSender( Thread ):
 				t.send( TcpMsg.T_URL_TRANSFER + 
 					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
 			time.sleep(1.5)
-							
-		
+
+class SQLHandler( Thread ):							
+	def __init__(self, managers, number, records):	#number per insert, update
+		Thread.__init__(self);
+		self.managers 	= managers; #{"rtype"=>obj}
+		self.number		= number;
+		self.records	= records; #{"rtype"=>[obj]}
+	
+	def run(self):
+		while True:
+			for rType, records in self.records :
+				if( len( records ) > number ):
+					self.managers[rType].insertList( records[:self.number] );
+					records	= records[self.number:];
+			time.sleep( 1 );
+
 class OverseerThread( Thread ):
 	def __init__(self, masterAddress, useragent, cPort, maxWorkers, period, urls, contentTypes, delay):
 		Thread.__init__(self)
@@ -196,7 +212,23 @@ class OverseerThread( Thread ):
 		self.urlsLock 		= RLock()
 		self.sender			= UrlSender( self.masterAddress, self.cPort, self.newUrls )
 		
+		
 		self.manager		= Url.UrlManager()
+		self.managers		= {}
+		self.records		= {}
+		
+		self.initManagers()
+		self.initRecords()
+		
+		self.sqlHandler		= SQLSender( self.managers, 100, self.records)
+		
+	def initManagers(self):
+		for k,r in rType:
+			self.managers[k]= r[2]
+			
+	def initRecords(self):
+		for k,r in rType:
+			self.records[k]= r[2]
 		
 	def pruneWorkers(self):
 		for worker in self.workers:
@@ -204,9 +236,9 @@ class OverseerThread( Thread ):
 				self.aliveWorkers -=1
 				del worker
 	
-	
 	def harness(self):
 		self.sender.start()
+		self.sqlHandler.start()
 		j=0
 		
 		while True:

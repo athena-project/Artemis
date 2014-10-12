@@ -19,8 +19,8 @@
 import SQLFactory
 
 class RessourceManager:
-	def __init__(self):
-		self.con = SQLFactory.getConn()
+	def __init__(self, con=None):
+		self.con = con if con != None else SQLFactory.getConn()
 		self.table	= ""
 		
 	def __del__(self):
@@ -46,6 +46,20 @@ class RessourceManager:
 		id = cur.lastrowid
 		cur.close()
 		return id
+	
+	def insertList(self, records):
+		buff = ""
+		for record in records:
+			if buff != "":
+				buff+=", "
+			buff += "('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
+			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)+"')"
+		
+		cur = self.con.cursor()
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
+					+"VALUES "+buff )
+		self.con.commit()
+		cur.close()
 		
 	def update(self, record):
 		cur = self.con.cursor()
@@ -176,12 +190,12 @@ class Ressource:
 		)
 	
 class RessourceHandler:
-	def __init__(self, manager):
-		self.manager	= manager
+	def __init__(self):
+		pass
 	
 	def save(self, ressource):
 		#SQl
-		self.manager.insert( ressource.getRecord() )
+		#self.manager.insert( ressource.getRecord() )
 		
 		#Data		
 		

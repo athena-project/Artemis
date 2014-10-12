@@ -69,16 +69,16 @@ class MasterThread( Thread ):
 		if( cacheHandler.exists( url ) ):
 			return False
 			
-		#try:
-		##Sql check
-			#record = manager.getByUrl( url.url )
-			#if record != None and (record.lastVisited > time.time()-delay):
-				#return False
-		#except Exception:
-			#f=open("sql.log", "a")
-			#f.write(url.url)
-			#f.write("\n")
-			#return False
+		#Sql check			
+		try:
+			record = manager.getByUrl( url.url )
+			if record != None and (record.lastVisited > time.time()-delay):
+				return False
+		except Exception:
+			f=open("sql.log", "a")
+			f.write(url.url)
+			f.write("\n")
+			return False
 		return True
 	
 	def run(self):

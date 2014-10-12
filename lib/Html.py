@@ -68,8 +68,8 @@ class HTMLParser( html.parser.HTMLParser ):
 		self.relatedRessources.append( tmp )
 
 class HtmlManager(TextManager):
-	def __init__(self):
-		TextManager.__init__(self)
+	def __init__(self, con):
+		TextManager.__init__(self, con)
 		self.table		= "html"
 
 class HtmlRecord( TextRecord ):
@@ -77,8 +77,8 @@ class HtmlRecord( TextRecord ):
 		TextRecord.__init__(self)
 		
 class HtmlHandler( TextHandler ):
-	def __init__(self, manager):
-		TextHandler.__init__(self, manager)
+	def __init__(self):
+		TextHandler.__init__(self)
 		
 class Html( Text ):
 	"""

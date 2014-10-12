@@ -26,8 +26,8 @@ import libpyRessource
 
 
 class TextManager( RessourceManager):
-	def __init__(self):
-		RessourceManager.__init__(self)
+	def __init__(self, con=None):
+		RessourceManager.__init__(self, con)
 		self.table		= "text"
 		
 	def __del__():
@@ -55,7 +55,22 @@ class TextManager( RessourceManager):
 		id = cur.lastrowid
 		cur.close()
 		return id
+	
+		def insertList(self, records):
+		buff = ""
+		for record in records:
+			if buff != "":
+				buff+=", "
+			buff += "('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
+			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
+			buff += "', '"+record.chunks+"', '"+str(record.revision)+"')"
 		
+		cur = self.con.cursor()
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
+					+"VALUES "+buff )
+		self.con.commit()
+		cur.close()
+	
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
@@ -112,15 +127,16 @@ class Text( Ressource ):
 
 
 class TextHandler:
-	def __init__(self, manager):
-		RessourceHandler.__init__(self, manager)
+	def __init__(self):
+		RessourceHandler.__init__(self)
 	
 	def save(self, text):
+		pass
 		#SQl
-		if( text.id == -1):
-			text.id = self.manager.insert( text.getRecord() )
-		else:
-			self.manager.save( text.getRecord() )
+		#if( text.id == -1):
+			#text.id = self.manager.insert( text.getRecord() )
+		#else:
+			#self.manager.save( text.getRecord() )
 			
 		#Data		
 		#cRessource	= libpyRessource.Ressource()

@@ -1,15 +1,18 @@
 from Html import *
 from Text import *
 
-textHandler	= TextHandler( TextManager() )
-htmlHandler = HtmlHandler( HtmlManager() )
-
+#Correspndance between rType and contentType
 contentTypeRules={
-	"application/javascript":[Text,textHandler],
-	"application/xhtml+xml":[Text,textHandler],
-	"application/xml":[Text,textHandler],
-	"text/css":[Text,textHandler],
-	"text/html":[Html,htmlHandler],
-	"text/plain":[Text,textHandler],
-	"text/xml":[Text,textHandler]
+	"application/javascript":"text",
+	"application/xhtml+xml":"html",
+	"application/xml":"text",
+	"text/css":"text",
+	"text/html":"html",
+	"text/plain":"text",
+	"text/xml":"text",
+}
+
+rTypes={
+	"text":[Text, TextRecord, TextManager, TextHandler],
+	"html":[Html, HtmlRecord, HtmlManager, HtmlHandler]
 }

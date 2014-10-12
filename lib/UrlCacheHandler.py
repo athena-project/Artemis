@@ -65,26 +65,28 @@ class UrlCacheHandler:
 				self.write( elmt, size )		
 			
 	def write(self, elmt, size):
-		if self.lastStreamSize + size > self.maxRamSize :
-			self.lastStreamSize = 0
-			self.oStream.close()
+		return
+		#if self.lastStreamSize + size > self.maxRamSize :
+			#self.lastStreamSize = 0
+			#self.oStream.close()
 			
-			self.wId += 1
-			self.oStream = open( self.parentDir+str(self.wId), "w" )
+			#self.wId += 1
+			#self.oStream = open( self.parentDir+str(self.wId), "w" )
 			
 		
-		self.oStream.write( elmt.serialize() )
-		self.lastStreamSize += size
-		self.currentMemSize		+= size
+		#self.oStream.write( elmt.serialize() )
+		#self.lastStreamSize += size
+		#self.currentMemSize		+= size
 	
 	def get( self ):
 		"""
 			@return elmt or None if no elmt in cache
 		"""
 		if self.currentRamSize == 0 :
-			if self.currentMemSize == 0 :
-				return None
-			self.load()
+			return
+			#if self.currentMemSize == 0 :
+				#return None
+			#self.load()
 		
 		elmt = self.data.popitem()[1]
 		self.currentRamSize -= elmt.size()
