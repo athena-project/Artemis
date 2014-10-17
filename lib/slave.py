@@ -38,7 +38,8 @@ s=CrawlerSlave.Slave(
 	period			= int( config['General']['period'] ), 
 	maxWorkers		= int( config['Thread']['maxWorkers'] ),
 	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
-	delay			= int( config['Update']['delay'] )
+	delay			= int( config['Update']['delay'] ),
+	maxSavers		= int( config['Overseer']['maxSavers'] )
 )
 
 s.harness()

@@ -57,10 +57,15 @@ class RessourceManager:
 		
 		cur = self.con.cursor()
 		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
-					+"VALUES "+buff )
+					+"VALUES "+buff +" RETURN id " )			
 		self.con.commit()
-		cur.close()
 		
+		l = []
+		for row in cur:
+			l.append( row[0] )
+		
+		cur.close()
+		return l
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
@@ -194,8 +199,8 @@ class RessourceHandler:
 		pass
 	
 	def save(self, ressource):
+		pass
 		#SQl
 		#self.manager.insert( ressource.getRecord() )
 		
 		#Data		
-		

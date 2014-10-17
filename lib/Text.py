@@ -22,7 +22,7 @@ import SQLFactory
 import hashlib
 import time
 
-import libpyRessource
+#import libpyRessource
 
 
 class TextManager( RessourceManager):
@@ -56,7 +56,7 @@ class TextManager( RessourceManager):
 		cur.close()
 		return id
 	
-		def insertList(self, records):
+	def insertList(self, records):
 		buff = ""
 		for record in records:
 			if buff != "":
@@ -67,10 +67,16 @@ class TextManager( RessourceManager):
 		
 		cur = self.con.cursor()
 		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
-					+"VALUES "+buff )
+					+"VALUES "+buff+" RETURN id " )
 		self.con.commit()
+		
+		l = []
+		for row in cur:
+			l.append( row[0] )
+		
+		
 		cur.close()
-	
+		return l
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
