@@ -23,9 +23,6 @@ class RessourceManager:
 		self.con = con if con != None else SQLFactory.getConn()
 		self.table	= ""
 		
-	def __del__(self):
-		self.con.close()
-		
 	def getByUrl(self, url):
 		cur = self.con.cursor()
 		cur.execute("SELECT * FROM "+self.table+" WHERE url='"+url+"'")
@@ -57,15 +54,13 @@ class RessourceManager:
 		
 		cur = self.con.cursor()
 		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
-					+"VALUES "+buff +" RETURN id " )			
+					+"VALUES "+buff )			
 		self.con.commit()
-		
-		l = []
-		for row in cur:
-			l.append( row[0] )
-		
+
 		cur.close()
-		return l
+		
+		firstId = self.con.insert_id()
+		return range( firstId, firstId+len( records ) )
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+

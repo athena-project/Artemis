@@ -42,11 +42,6 @@ class WorkerThread( Thread ):
 		self.manager 			= manager
 				
 		self.waitingRessources	= waitingRessources
-				
-		self.con			= SQLFactory.getConn()
-		self.managers		= {}
-		for k in rTypes:
-			self.managers[k]= rTypes[k][2]( self.con )
 	
 	def run(self):
 		while True:
@@ -55,7 +50,10 @@ class WorkerThread( Thread ):
 					return None
 				url = self.urls.pop()
 			#Sql check
-				record = self.manager.getByUrl( url.url )
+				try:
+					record = self.manager.getByUrl( url.url )
+				except Exception:
+					return 
 			if record == None or (record.lastVisited < time.time()-self.delay):
 				self.dispatch( url, record )
 				
@@ -72,16 +70,16 @@ class WorkerThread( Thread ):
 			#log
 			
 	def http( self, url, urlObj, urlRecord ):
-		print("under way")
+		#print("under way")
 		try:
 			r = request.urlopen( url.url )	
 		except :
 			#log
-			print("failes")	
+			#print("failes")	
 			return
 		#ContentType 
 		cT = r.getheader("Content-Type")
-		print("under way2")
+		#print("under way2")
 		#Statut check
 		if( r.status != 200 ):
 			return 
@@ -109,7 +107,7 @@ class WorkerThread( Thread ):
 			#log
 			return 
 		
-		print("content type ok")
+		#print("content type ok")
 		data = r.read()
 		#Hash
 		m_sha512 = hashlib.sha512()
@@ -137,7 +135,7 @@ class WorkerThread( Thread ):
 		ressource.data				= data
 		self.newUrls.extend( ressource.extractUrls( urlObj ) )
 		
-		self.waitingRessources.append( [rType, url.url, data, t, h_sha512] )
+		self.waitingRessources.append( [rType, cT, url.url, data, t, h_sha512] )
 	#def ftp( self, url):
 	#	r = request.urlopen( url)	
 	#	if( r.status == 200 ):
@@ -146,7 +144,7 @@ class WorkerThread( Thread ):
 	#		#log
 	
 	def save(self, url, urlObj, urlRecord, cT, data):
-		print("begin false save")
+		#print("begin false save")
 		
 		
 		
@@ -179,7 +177,7 @@ class WorkerThread( Thread ):
 		#Feed the slave with the links owned by the current ressource
 		self.newUrls.extend( ressource.extractUrls( urlObj ) )
 		t = time.time()-t
-		print(t)
+		#print(t)
 		
 class UrlSender( Thread ):
 	def __init__(self, masterAddress, cPort, newUrls):
@@ -206,13 +204,14 @@ class SQLHandler( Thread ):
 		self.records			= {}				#already preprocess
 		self.ressources			= ressources		#waiting for disk 
 		
-		
+		for rType in rTypes :
+			self.records[rType]=[]
 		
 	def preprocessing(self, n):
 		i,n = 0, min(n, len(self.waitingRessources))
 		while i<n:
 			wR	= self.waitingRessources[i]
-			rType, url,  data, t, h_sha512 = wR[0], wR[1], wR[2], wR[3], wR[4]
+			rType, cT, url,  data, t, h_sha512 = wR[0], wR[1], wR[2], wR[3], wR[4], wR[5]
 			
 			ressourceRecord		= self.managers[rType].getByUrl( url=url )
 			ressource			= rTypes[ rType ][0]()
@@ -225,19 +224,19 @@ class SQLHandler( Thread ):
 			ressource.lastUpdate			= t
 			#if h_sha512 == ressource.sha512[-1]:
 			ressource.data				= data
-			
-			self.records[rType] = ressource
+
+			self.records[rType].append( ressource )
 			i+=1
 	
 	
 	def run(self):
 		while True:
 			self.preprocessing( self.number )
-			
+			print("SQL ok")
 			for rType in self.records :
 				records = self.records[rType]
 				if( len( records ) > self.number ):
-					i, l1, l2, l3, il2 = 0, [], [], [] #l2 insertion, l3 update, il2 correspondace ressource id
+					i, l1, l2, l3, il2 = 0, [], [], [], [] #l2 insertion, l3 update, il2 correspondace ressource id
 					while i < self.number:
 						l1.append( records.pop() )
 						if( l1[-1].id == -1 ):
@@ -246,21 +245,22 @@ class SQLHandler( Thread ):
 						else:
 							l3.append( l1[-1].getRecord() )
 						i+=1
-					
-					ids = self.managers[rType].insertList( l2 );
-					self.managers[rType].updateList( l3 );
+					if l2:
+						ids = self.managers[rType].insertList( l2 );
+					if l3:
+						self.managers[rType].updateList( l3 );
 					
 					j = 0
 					while j<len(ids):
-						l1[ il2[j] ].setId( ids[j] )
+						l1[ il2[j] ].id = ids[j] 
 						j+=1
 					
-					self.ressources.extend( l1 )	
+					self.ressources[rType].extend( l1 )	
 			time.sleep( 1 );
 
 class Saver( Thread ):
 	def __init__(self, ressources={}, ressourceLock=None):
-		Thread.__init__(self)
+		Thread.__init__(self);
 		self.ressources		= ressources
 		self.ressourceLock	= ressourceLock
 		
@@ -268,21 +268,18 @@ class Saver( Thread ):
 		for k in rTypes:
 			self.handlers[k]= rTypes[k][3]()
 		
-	def save():
+	def run(self):
 		while True:
+			print("holla")
 			ressource 	= None
 			rType		= ""
 			with self.ressourceLock:
-				flag, i, keys = True, 0, self.ressources.keys()
-				while i<len(keys) and flag:
-					if self.ressources[ keys[i] ]:
-						ressource = self.ressources.pop()
-						rType	= keys[i] 
-						flag = False
-					i+=1
-			
-			if ressource != None:
-				self.handlers[rType].save( ressource ) 
+				for key in self.ressources:
+					print("len ressources "+str(key)+"   "+str(len(self.ressources[ key ])))
+					while self.ressources[ key ] :
+						ressource = self.ressources[key].pop()
+						self.handlers[key].save( ressource ) 
+						print("saving saving saving saving")
 				
 			time.sleep( 1 )
 				
@@ -335,8 +332,9 @@ class OverseerThread( Thread ):
 	def harness(self):
 		i=0
 		while i<self.maxSavers:
-			self.savers.append( Saver( self.ressources, self.ressourceLock ) )
-			self.savers[-1].start()
+			s =  Saver( self.ressources, self.ressourceLock )
+			self.savers.append( s )
+			s.start()
 			i+=1
 		
 		self.sender.start()

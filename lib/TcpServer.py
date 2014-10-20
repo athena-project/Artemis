@@ -72,7 +72,6 @@ class TcpServer:
 
 				else:
 					buff = s.recv(TcpMsg.T_BUFFER_SIZE)
-					print(buff)
 					if buff:
 						# A readable client socket has data
 						# Add output channel for response

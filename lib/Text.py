@@ -29,9 +29,6 @@ class TextManager( RessourceManager):
 	def __init__(self, con=None):
 		RessourceManager.__init__(self, con)
 		self.table		= "text"
-		
-	def __del__():
-		RessourceManager.__del__(self)
 	
 	
 	def getByUrl(self, url):
@@ -66,17 +63,33 @@ class TextManager( RessourceManager):
 			buff += "', '"+record.chunks+"', '"+str(record.revision)+"')"
 		
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
-					+"VALUES "+buff+" RETURN id " )
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision)"
+					+"VALUES "+buff )
 		self.con.commit()
 		
-		l = []
-		for row in cur:
-			l.append( row[0] )
-		
-		
 		cur.close()
-		return l
+		
+		firstId = self.con.insert_id()
+		return range( firstId, firstId+len( records ) )
+	
+	def updateList(self, records):
+		buff = ""
+		for record in records:
+			if buff != "":
+				buff+=", "
+			buff += "('"+record.id+"', "+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
+			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
+			buff += "', '"+record.chunks+"', '"+str(record.revision)+"')"
+		
+		cur = self.con.cursor()
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision)"+
+					"VALUES "+buff+ " ON DUPLICATE KEY UPDATE url=VALUES(url), domain=VALUES(domain), relatedRessources=VALUES(relatedRessources),"+
+					" sizes=VALUES(sizes), contentTypes=VALUES(contentTypes), times=VALUES(times), sha512=VALUES(sha512),"+
+					" lastUpdate=VALUES(lastUpdate), chunks=VALUES(chunks), revision=VALUES(revision)")
+		
+		self.con.commit()
+		cur.close()
+		
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
@@ -137,7 +150,9 @@ class TextHandler:
 		RessourceHandler.__init__(self)
 	
 	def save(self, text):
-		pass
+		f = open( "tmp/Texts/"+str(text.id), "w")
+		f.write( text.data )
+		f.close()
 		#SQl
 		#if( text.id == -1):
 			#text.id = self.manager.insert( text.getRecord() )
