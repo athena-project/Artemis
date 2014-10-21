@@ -15,7 +15,7 @@
 #  
 #	@autor Severus21
 #
-
+import sys
 import urllib.request as request
 from urllib.parse import urlparse
 from threading import Thread, RLock
@@ -121,13 +121,15 @@ class WorkerThread( Thread ):
 			urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
 		urlRecord.lastsha512		= h_sha512
 		urlRecord.lastVisited	= t
-		try:
-			self.manager.save( urlRecord )
-		except Exception as e:
-			f=open("svae_slave.log", "a")
-			f.write(str(e))#format( e.strerror))
-			f.close()
-			return
+		
+		with self.urlsLock:
+			try:
+				self.manager.save( urlRecord )
+			except Exception as e:
+				f=open("svae_slave.log", "a")
+				f.write(str(e))#format( e.strerror))
+				f.close()
+				return
 		
 		rType						=  contentTypeRules[ contentType ] 
 		ressource					= rTypes[ rType ][0]()
@@ -135,7 +137,7 @@ class WorkerThread( Thread ):
 		ressource.data				= data
 		self.newUrls.extend( ressource.extractUrls( urlObj ) )
 		
-		self.waitingRessources.append( [rType, cT, url.url, data, t, h_sha512] )
+		self.waitingRessources.append( [rType, cT, url.url, urlObj.netloc, data, t, h_sha512] )
 	#def ftp( self, url):
 	#	r = request.urlopen( url)	
 	#	if( r.status == 200 ):
@@ -188,12 +190,11 @@ class UrlSender( Thread ):
 	
 	def run(self):
 		while True:
-			if self.newUrls :
-				print("sending")
+			while self.newUrls :
 				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_URL_TRANSFER + 
 					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
-			time.sleep(1.5)
+			time.sleep(1)
 
 class SQLHandler( Thread ):							
 	def __init__(self, managers, number, waitingRessources, ressources):	#number per insert, update
@@ -210,13 +211,15 @@ class SQLHandler( Thread ):
 	def preprocessing(self, n):
 		i,n = 0, min(n, len(self.waitingRessources))
 		while i<n:
-			wR	= self.waitingRessources[i]
-			rType, cT, url,  data, t, h_sha512 = wR[0], wR[1], wR[2], wR[3], wR[4], wR[5]
+			wR	= self.waitingRessources.pop()
+			rType, cT, url, domain, data, t, h_sha512 = wR[0], wR[1], wR[2], wR[3], wR[4], wR[5], wR[6]
 			
 			ressourceRecord		= self.managers[rType].getByUrl( url=url )
 			ressource			= rTypes[ rType ][0]()
 			ressource.hydrate( ressourceRecord )
-			
+
+			ressource.url					= url
+			ressource.domain				= domain
 			ressource.sizes.append(			len(data ) ) 
 			ressource.contentTypes.append( 	cT ) 
 			ressource.times.append( 		time.time() )
@@ -224,18 +227,16 @@ class SQLHandler( Thread ):
 			ressource.lastUpdate			= t
 			#if h_sha512 == ressource.sha512[-1]:
 			ressource.data				= data
-
+			print("pre")
 			self.records[rType].append( ressource )
 			i+=1
-	
 	
 	def run(self):
 		while True:
 			self.preprocessing( self.number )
-			print("SQL ok")
 			for rType in self.records :
 				records = self.records[rType]
-				if( len( records ) > self.number ):
+				while( len( records ) > self.number ):
 					i, l1, l2, l3, il2 = 0, [], [], [], [] #l2 insertion, l3 update, il2 correspondace ressource id
 					while i < self.number:
 						l1.append( records.pop() )
@@ -245,6 +246,8 @@ class SQLHandler( Thread ):
 						else:
 							l3.append( l1[-1].getRecord() )
 						i+=1
+						
+					ids = []
 					if l2:
 						ids = self.managers[rType].insertList( l2 );
 					if l3:
@@ -270,16 +273,15 @@ class Saver( Thread ):
 		
 	def run(self):
 		while True:
-			print("holla")
 			ressource 	= None
 			rType		= ""
-			with self.ressourceLock:
-				for key in self.ressources:
-					print("len ressources "+str(key)+"   "+str(len(self.ressources[ key ])))
-					while self.ressources[ key ] :
-						ressource = self.ressources[key].pop()
+			for key in self.ressources:
+				while self.ressources[ key ] :
+					with self.ressourceLock:
+						if  self.ressources[ key ] :
+							ressource = self.ressources[key].pop()
+					if ressource != None :
 						self.handlers[key].save( ressource ) 
-						print("saving saving saving saving")
 				
 			time.sleep( 1 )
 				
@@ -324,10 +326,12 @@ class OverseerThread( Thread ):
 		
 		
 	def pruneWorkers(self):
-		for worker in self.workers:
-			if not worker.is_alive():
+		i=0
+		while i<len(self.workers) :
+			if not self.workers[i].is_alive():
 				self.aliveWorkers -=1
-				del worker
+				del self.workers[i]
+			i+=1
 	
 	def harness(self):
 		i=0
@@ -349,9 +353,7 @@ class OverseerThread( Thread ):
 				n = self.maxWorkers-self.aliveWorkers
 				if n>0 :
 					i=0
-					print("nbr connexion here j"+str(j))
 					while i<n :
-						j+1
 						#try :
 						w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
 											contentTypes=self.contentTypes, delay=self.delay, manager=self.manager,
@@ -360,7 +362,6 @@ class OverseerThread( Thread ):
 						self.aliveWorkers += 1
 						w.start()
 						i+=1
-						j+=1
 						#except Exception:
 							#pass
 						

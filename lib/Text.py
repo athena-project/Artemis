@@ -77,12 +77,13 @@ class TextManager( RessourceManager):
 		for record in records:
 			if buff != "":
 				buff+=", "
-			buff += "('"+record.id+"', "+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
+			buff += "('"+str(record.id)+"', '"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
 			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
 			buff += "', '"+record.chunks+"', '"+str(record.revision)+"')"
 		
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision)"+
+		
+		cur.execute("INSERT INTO "+self.table+" (id, url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision)"+
 					"VALUES "+buff+ " ON DUPLICATE KEY UPDATE url=VALUES(url), domain=VALUES(domain), relatedRessources=VALUES(relatedRessources),"+
 					" sizes=VALUES(sizes), contentTypes=VALUES(contentTypes), times=VALUES(times), sha512=VALUES(sha512),"+
 					" lastUpdate=VALUES(lastUpdate), chunks=VALUES(chunks), revision=VALUES(revision)")
