@@ -126,7 +126,7 @@ class Text( Ressource ):
 		self.chunks		= self.unserialiseSimpleList( record.chunks, int )
 		self.revision	= int(record.revision)
 	
-	def getRecord(self):
+	def getRecord(self):		
 		return TextRecord(
 			id					= self.id,
 			url					= self.url,

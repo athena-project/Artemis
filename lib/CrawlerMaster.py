@@ -172,7 +172,7 @@ class Master( TcpServer ):
 				return False
 		else:
 			return False
-
+			
 		#Check domain and protocol
 		urlP = urlparse( url.url )
 		

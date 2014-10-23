@@ -22,7 +22,7 @@ import SQLFactory
 con = SQLFactory.getConn()
 
 def doublon( table ):
-	cur = self.con.cursor()
+	cur = con.cursor()
 	cur.execute("SELECT COUNT(id),url AS nbr_doublon, url FROM "+table+" GROUP BY url HAVING   COUNT(url) > 1")
 	
 	for row in cur: #url is a unique id
@@ -30,10 +30,45 @@ def doublon( table ):
 	cur.close()
 
 def avgSize( table ):
-	cur = self.con.cursor()
-	cur.execute("SELECT AVG(sizes) FROM "+table)
+	size = -1
+	
+	cur = con.cursor()
+	cur.execute('SELECT AVG( size ) FROM( SELECT SUBSTRING(sizes, 1,LOCATE( ":", sizes)-1) AS size FROM '+table+' ) AS T1')
 	
 	for row in cur: #url is a unique id
-		print( "taille moyenne : ", row[0])
+		size = row[0]
+	if size == 0 :
+		cur.execute('SELECT AVG( sizes ) FROM '+table)
+		for row in cur: #url is a unique id
+			size = row[0]
 	cur.close()
+	return size
 	
+def duration(table):
+	duration = -1
+	cur = con.cursor()
+	cur.execute('SELECT MAX(lastUpdate) - MIN(lastUpdate) AS duration FROM '+table)
+	
+	for row in cur: #url is a unique id
+		duration = row[0]
+	cur.close()
+	return duration
+	
+def count(table):
+	count = -1
+	cur = con.cursor()
+	cur.execute('SELECT COUNT(id) AS c FROM '+table)
+	
+	for row in cur: #url is a unique id
+		count = row[0]
+	cur.close()
+	return count
+
+
+
+def speed(table):
+	return count(table)/duration(table)
+
+print( 'speed          ', speed("html") )
+print( 'taille moyenne ', avgSize("html") )
+

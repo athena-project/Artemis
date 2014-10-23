@@ -49,27 +49,22 @@ class WorkerThread( Thread ):
 				if not self.urls :
 					return None
 				url = self.urls.pop()
-			#Sql check
-				try:
-					record = self.manager.getByUrl( url.url )
-				except Exception:
-					return 
-			if record == None or (record.lastVisited < time.time()-self.delay):
-				self.dispatch( url, record )
-				
+			
+			self.dispatch( url )
+
 				
 	### Network handling ###
-	def dispatch(self, url, urlRecord):
+	def dispatch(self, url):
 		urlObject = urlparse( url.url )	
 		if( urlObject.scheme == "http" or urlObject.scheme == "https"):
-			self.http( url, urlObject, urlRecord )
+			self.http( url, urlObject )
 		#if( urlObject.scheme == "ftp" or urlObject.scheme == "ftps"):
 		#	self.ftp( url )
 		else :
 			pass
 			#log
 			
-	def http( self, url, urlObj, urlRecord ):
+	def http( self, url, urlObj ):
 		#print("under way")
 		try:
 			r = request.urlopen( url.url )	
@@ -117,8 +112,7 @@ class WorkerThread( Thread ):
 		data				= str(data.decode(charset.lower()))
 
 		#UrlRecord hydrating
-		if urlRecord == None:
-			urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
+		urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
 		urlRecord.lastsha512		= h_sha512
 		urlRecord.lastVisited	= t
 		
@@ -126,9 +120,6 @@ class WorkerThread( Thread ):
 			try:
 				self.manager.save( urlRecord )
 			except Exception as e:
-				f=open("svae_slave.log", "a")
-				f.write(str(e))#format( e.strerror))
-				f.close()
 				return
 		
 		rType						=  contentTypeRules[ contentType ] 
@@ -136,7 +127,6 @@ class WorkerThread( Thread ):
 		ressource.url				= url.url
 		ressource.data				= data
 		self.newUrls.extend( ressource.extractUrls( urlObj ) )
-		
 		self.waitingRessources.append( [rType, cT, url.url, urlObj.netloc, data, t, h_sha512] )
 	#def ftp( self, url):
 	#	r = request.urlopen( url)	
@@ -168,7 +158,7 @@ class WorkerThread( Thread ):
 		ressource.domain				= urlObj.netloc
 		ressource.sizes.append(			len(data ) ) 
 		ressource.contentTypes.append( 	cT ) 
-		ressource.times.append( 		time.time() )
+		ressource.times.append( 		t )
 		ressource.sha512.append(	 		h_sha512  )
 		ressource.lastUpdate			= t
 		#if h_sha512 == ressource.sha512[-1]:
@@ -227,7 +217,6 @@ class SQLHandler( Thread ):
 			ressource.lastUpdate			= t
 			#if h_sha512 == ressource.sha512[-1]:
 			ressource.data				= data
-			print("pre")
 			self.records[rType].append( ressource )
 			i+=1
 	
@@ -246,7 +235,7 @@ class SQLHandler( Thread ):
 						else:
 							l3.append( l1[-1].getRecord() )
 						i+=1
-						
+
 					ids = []
 					if l2:
 						ids = self.managers[rType].insertList( l2 );
@@ -346,9 +335,11 @@ class OverseerThread( Thread ):
 		j=0
 		
 		while True:
-			if not self.urls:
+			minUrls = 2 * self.maxWorkers
+			if len(self.urls) < minUrls:
 				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_PENDING )
+				
 			while self.urls :
 				n = self.maxWorkers-self.aliveWorkers
 				if n>0 :

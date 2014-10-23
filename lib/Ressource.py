@@ -141,10 +141,12 @@ class Ressource:
 		n=len(s)
 		while i<n :
 			if( s[i] == ":" ):
-				end = i-1
-				l.append( f(s[begin, end]) )
+				end = i
+				l.append( f(s[begin : end]) )
 				begin = i+1
 			i+=1
+		if( begin != n ):
+			l.append( f(s[begin : ]) )
 		return l
 		
 	def serializeTupleList(self, l):
