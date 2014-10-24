@@ -1,5 +1,10 @@
 0.1.0
-    Multiple sql insert
+	Multiple sql insert
 0.2.0
 	Asynchronous SQL and disk writing
-    
+0.2.1
+	Memory leek correction
+	Stat module added
+0.2.2
+	Optimisation SQL check, and url request
+
