@@ -46,13 +46,14 @@ CREATE TABLE `text` (
   `sizes` text,
   `contentTypes` text,
   `times` text,
-  `sha512` varchar(128),
+  `has512` varchar(128),
   `lastUpdate` double,
   `chunks` text,
   `revision` INT,
   PRIMARY KEY (`id`),
   KEY key_url (`url`(50))
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
 
 --
 -- Table structure for table `html`
