@@ -131,7 +131,7 @@ class Ressource:
 		s = ""
 		for x in l:
 			s+=str(x)+":"
-		return s[0:len(s)-1]
+		return s[0:len(s)]
 		
 	def unserialiseSimpleList(self, s, f):
 		l  = []
@@ -145,15 +145,14 @@ class Ressource:
 				l.append( f(s[begin : end]) )
 				begin = i+1
 			i+=1
-		if( begin != n ):
-			l.append( f(s[begin : ]) )
+			
 		return l
 		
 	def serializeTupleList(self, l):
 		s = ""
 		for (a,b) in l:
 			s+=str(a)+"|"+str(b)+":"
-		return s[0:len(s)-1]
+		return s[0:len(s)]
 		
 	def unserializeTuple(self, s, f1, f2):
 		find = False

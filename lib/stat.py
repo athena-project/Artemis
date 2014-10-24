@@ -18,6 +18,7 @@
 
 
 import SQLFactory
+from math import *
 
 con = SQLFactory.getConn()
 
@@ -37,12 +38,8 @@ def avgSize( table ):
 	
 	for row in cur: #url is a unique id
 		size = row[0]
-	if size == 0 :
-		cur.execute('SELECT AVG( sizes ) FROM '+table)
-		for row in cur: #url is a unique id
-			size = row[0]
 	cur.close()
-	return size
+	return floor(size)
 	
 def duration(table):
 	duration = -1
