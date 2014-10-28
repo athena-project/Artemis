@@ -28,8 +28,7 @@ CREATE TABLE `urlrecord` (
   `lastSha512` varchar(128),
   `lastVisited` double,
   PRIMARY KEY (`id`),
-  KEY key_url (`url`(50)),
-  KEY key_lastSha512 (`lastSha512`)
+  UNIQUE key_url (`url`(50))
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 --
@@ -50,8 +49,9 @@ CREATE TABLE `text` (
   `lastUpdate` double,
   `chunks` text,
   `revision` INT,
+  `parent` BIGINT,
   PRIMARY KEY (`id`),
-  KEY key_url (`url`(50))
+  UNIQUE key_url (`url`(50))
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 
@@ -73,6 +73,7 @@ CREATE TABLE `html` (
   `lastUpdate` double,
   `chunks` text,
   `revision` INT,
+  `parent` BIGINT,
   PRIMARY KEY (`id`),
-  KEY key_url (`url`(50))
+  UNIQUE key_url (`url`(50))
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;

@@ -29,16 +29,17 @@ class RessourceManager:
 
 		r=None
 		for row in cur: #url is a unique id
-			r=RessourceRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8] )
+			r=RessourceRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9] )
 		cur.close()
 		
 		return r
 	
 	def insert(self, record):
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, parent)"
 					+"VALUES ('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
-					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)+"')" )
+					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
+					+"',  '"+str(record.parent)+"')" )
 		self.con.commit()
 		id = cur.lastrowid
 		cur.close()
@@ -50,10 +51,11 @@ class RessourceManager:
 			if buff != "":
 				buff+=", "
 			buff += "('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
-			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)+"')"
+			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"
+			buff += str(record.lastUpdate)+"', '"+str(record.parent)+"')"
 		
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)"
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, parent)"
 					+"VALUES "+buff )			
 		self.con.commit()
 
@@ -61,11 +63,13 @@ class RessourceManager:
 		
 		firstId = self.con.insert_id()
 		return range( firstId, firstId+len( records ) )
+		
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
 					"', sizes:='"+record.sizes+"', contentTypes:='"+record.contentTypes+"', times:='"+record.times+
-					+"', sha512:='"+record.sha512+"', lastUpdate:='"+str(record.lastUpdate)+"' WHERE id='"+str(record.id)+"'" )
+					+"', sha512:='"+record.sha512+"', lastUpdate:='"+str(record.lastUpdate)
+					+"', parent:='"+str(record.parent)+"' WHERE id='"+str(record.id)+"'" )
 		self.con.commit()
 		cur.close()
 		
@@ -78,7 +82,7 @@ class RessourceManager:
 class RessourceRecord:
 	"""
 	"""
-	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", sha512="", lastUpdate=""):
+	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", sha512="", lastUpdate="", parent=""):
 		self.id 				= int(id)
 		self.url 				= url
 		self.domain 			= domain
@@ -88,6 +92,7 @@ class RessourceRecord:
 		self.times 				= times
 		self.sha512 				= sha512
 		self.lastUpdate 		= float(lastUpdate)
+		self.parent				= int( parent ) #urlrecord id parent
 
 class Ressource:
 	"""
@@ -104,6 +109,7 @@ class Ressource:
 		self.sha512 = []
 		
 		self.lastUpdate = 0
+		self.parent		= -1
 		
 		self.data = ""
 		
@@ -123,6 +129,7 @@ class Ressource:
 		self.sha512				= self.unserialiseSimpleList( record.sha512, str )
 		
 		self.lastUpdate			= record.lastUpdate
+		self.parent				= record.parent
 	
 	def extractUrls(self, parentUrl):
 		return []
@@ -188,6 +195,7 @@ class Ressource:
 			sha512					= self.serializeSimpleList( self.sha512 ),
 			
 			lastUpdate			= self.lastUpdate
+			parent				= self.parent
 		)
 	
 class RessourceHandler:

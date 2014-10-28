@@ -180,8 +180,8 @@ class UrlSender( Thread ):
 	
 	def run(self):
 		while True:
+			t = TcpClient( self.masterAddress, self.cPort )
 			while self.newUrls :
-				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_URL_TRANSFER + 
 					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
 			time.sleep(1)
@@ -339,8 +339,14 @@ class OverseerThread( Thread ):
 			if len(self.urls) < minUrls:
 				t = TcpClient( self.masterAddress, self.cPort )
 				t.send( TcpMsg.T_PENDING )
-				
+			print( "newUrls        : ", sys.getsizeof( self.newUrls ) )
+			print( "urls : ", sys.getsizeof( self.urls ) )
+			print()
 			while self.urls :
+				#if len(self.urls) < minUrls:
+					#t = TcpClient( self.masterAddress, self.cPort )
+					#t.send( TcpMsg.T_PENDING )
+				
 				n = self.maxWorkers-self.aliveWorkers
 				if n>0 :
 					i=0

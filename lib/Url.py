@@ -54,16 +54,21 @@ class UrlManager:
 	def insert(self, record):
 		cur = self.con.cursor()
 		cur.execute("INSERT INTO urlrecord (protocol, domain, url, lastSha512, lastVisited) VALUES ('"+record.protocol+
-					"', '"+record.domain+"', '"+record.url+"', '"+record.lastSha512+"', '"+str(record.lastVisited)+"')" )
+					"', '"+record.domain+"', '"+record.url+"', '"+record.lastSha512+"', '"+str(record.lastVisited)+"')"+
+					" ON DUPLICATE KEY UPDATE protocol=VALUES(protocol), domain=VALUES(domain), url=VALUES(url), "
+					+" lastSha512=VALUES(lastSha512), lastVisited=VALUES(lastVisited)")
 		self.con.commit()
-		id = cur.lastrowid
+		if( record.id < 1):
+			record.id = cur.lastrowid
+		
 		cur.close()
-		return id
+		return record.id
 		
 	def update(self, record):
 		cur = self.con.cursor()
 		cur.execute("UPDATE urlrecord SET protocol:='"+record.protocol+"', domain:='"+record.domain+"', url:='"+record.url+
 					"', lastSha512:='"+record.lastSha512+"', lastVisited:='"+str(record.lastVisited)+"' WHERE id='"+str(record.id)+"'" )
+		
 		self.con.commit()
 		cur.close()
 		
@@ -174,7 +179,7 @@ def makeCacheBundle(cacheHandler, fValid, manager, delay, maxSize):
 	urlsSize = cacheHandler.currentRamSize + cacheHandler.currentMemSize
 	i,n = 0,0
 	
-	while i<urlsSize and i<maxSize :
+	while i<urlsSize and i<maxSize and not cacheHandler.empty():
 		url = cacheHandler.get()
 		if not fValid( url, cacheHandler, manager, delay):
 			pass

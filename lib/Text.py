@@ -37,17 +37,17 @@ class TextManager( RessourceManager):
 
 		r=None
 		for row in cur: #url is a unique id
-			r=TextRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10] )
+			r=TextRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11] )
 		cur.close()
 		
 		return r
 	
 	def insert(self, record):
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision)"
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision, parent)"
 					+"VALUES ('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
 					+"', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
-					+"', '"+record.chunks+"', '"+str(record.revision)+"')" )
+					+"', '"+record.chunks+"', '"+str(record.revision)+"', '"+str(record.parent)+"')" )
 		self.con.commit()
 		id = cur.lastrowid
 		cur.close()
@@ -60,10 +60,10 @@ class TextManager( RessourceManager):
 				buff+=", "
 			buff += "('"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
 			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
-			buff += "', '"+record.chunks+"', '"+str(record.revision)+"')"
+			buff += "', '"+record.chunks+"', '"+str(record.revision)+"', '"+str(record.parent)+"')"
 		
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision)"
+		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision, parent)"
 					+"VALUES "+buff )
 		self.con.commit()
 		
@@ -79,14 +79,14 @@ class TextManager( RessourceManager):
 				buff+=", "
 			buff += "('"+str(record.id)+"', '"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
 			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
-			buff += "', '"+record.chunks+"', '"+str(record.revision)+"')"
+			buff += "', '"+record.chunks+"', '"+str(record.revision)+"', '"+str(record.parent)+"')"
 		
 		cur = self.con.cursor()
 		
-		cur.execute("INSERT INTO "+self.table+" (id, url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision)"+
+		cur.execute("INSERT INTO "+self.table+" (id, url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision, parent)"+
 					"VALUES "+buff+ " ON DUPLICATE KEY UPDATE url=VALUES(url), domain=VALUES(domain), relatedRessources=VALUES(relatedRessources),"+
 					" sizes=VALUES(sizes), contentTypes=VALUES(contentTypes), times=VALUES(times), sha512=VALUES(sha512),"+
-					" lastUpdate=VALUES(lastUpdate), chunks=VALUES(chunks), revision=VALUES(revision)")
+					" lastUpdate=VALUES(lastUpdate), chunks=VALUES(chunks), revision=VALUES(revision), parent=VALUES(parent)")
 		
 		self.con.commit()
 		cur.close()
@@ -96,15 +96,15 @@ class TextManager( RessourceManager):
 		cur.execute("UPDATE "+self.table+" SET url:='"+record.url+"', domain:='"+record.domain+"', relatedRessources:='"+record.relatedRessources+
 					"', sizes:='"+record.sizes+"', contentTypes:='"+record.contentTypes+"', times:='"+record.times
 					+"', sha512:='"+record.sha512+"', lastUpdate:='"+str(record.lastUpdate)+"', chunks:='"+record.chunks
-					+"', revision:='"+str(record.revision)+"' WHERE id="+str(record.id)+"" )
+					+"', revision:='"+str(record.revision)+"', parent:='"+str(record.parent)+"' WHERE id="+str(record.id)+"" )
 		self.con.commit()
 		cur.close()
 		
 
 class TextRecord( RessourceRecord ):
 	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", sha512="", lastUpdate="", 
-	chunks="", revision=""):
-		RessourceRecord.__init__(self, id, url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate)
+	chunks="", revision="", parent=""):
+		RessourceRecord.__init__(self, id, url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, parent)
 		self.chunks		= chunks
 		self.revision 	= int(revision)
 
@@ -139,6 +139,7 @@ class Text( Ressource ):
 			sha512					= self.serializeSimpleList( self.sha512),
 			
 			lastUpdate			= self.lastUpdate,
+			parent				= self.parent,
 			
 			chunks				= self.serializeSimpleList( self.chunks),
 			revision			= self.revision

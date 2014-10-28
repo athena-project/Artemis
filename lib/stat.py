@@ -66,6 +66,16 @@ def count(table):
 def speed(table):
 	return count(table)/duration(table)
 
+def countUpdate(table):
+	count = -1
+	cur = con.cursor()
+	cur.execute('SELECT COUNT(id) AS c FROM '+table+' WHERE sizes LIKE "%:%"' )
+	
+	for row in cur: #url is a unique id
+		count = row[0]
+	cur.close()
+	return count
+
 print( 'speed          ', speed("html") )
 print( 'taille moyenne ', avgSize("html") )
 

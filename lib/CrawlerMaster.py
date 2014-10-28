@@ -65,6 +65,9 @@ class MasterThread( Thread ):
 		"""
 			Before sending
 		"""	
+		if( url == None):
+			return False
+			
 		#Check in ram
 		if( cacheHandler.exists( url ) ):
 			return False
@@ -72,7 +75,7 @@ class MasterThread( Thread ):
 		#Sql check			
 		try:
 			record = manager.getByUrl( url.url )
-			if record != None and (record.lastVisited > time.time()-delay):
+			if record != None and (time.time() - record.lastVisited < delay):
 				return False
 		except Exception:
 			f=open("sql.log", "a")

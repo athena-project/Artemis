@@ -50,7 +50,7 @@ class UrlCacheHandler:
 		self.oStream.close()
 		
 	def empty(self):
-		return (self.currentRamSize>0) or (self.currentMemSize>0)
+		return (self.currentRamSize==0) and (self.currentMemSize==0)
 		
 	def exists(self, elmt):
 		return (elmt.url in self.data)
