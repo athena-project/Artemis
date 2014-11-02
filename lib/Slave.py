@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 import time
 import hashlib
 
-from collection import deque
+from collections import deque
 from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
 
@@ -107,7 +107,7 @@ class CrawlerOverseer( Thread ):
 					while i<n :
 						w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
 											contentTypes=self.contentTypes, delay=self.delay, manager=self.manager,
-											waitingRessources=self.waitingRessources, self.Exit )
+											waitingRessources=self.waitingRessources, Exit = self.Exit )
 						self.crawlers.append( w )
 						w.start()
 						i+=1
@@ -280,7 +280,7 @@ class SQLHandler( Thread ):
 							insertRessources[i].id	= ids[i]
 							i+=1
 					
-					if updateRecords
+					if updateRecords:
 						self.managers[rType].updateList( updateRecords );
 					
 					self.ressources[rType].extend( insertRessources);
@@ -363,7 +363,7 @@ class Slave( TcpServer ):
 	
 	def harness(self):
 		
-		self.sender	= Sender( masterAddress = self.masterAddress, cPort = self.cPort, newUrls = self.newUrls, Exit =self.Exit):
+		self.sender	= Sender( masterAddress = self.masterAddress, cPort = self.cPort, newUrls = self.newUrls, Exit =self.Exit)
 		
 		self.crawlerOverseer = CrawlerOverseer(masterAddress = self.masterAddress, useragent = self.useragent,
 										cPort = self.cPort, maxCrawlers  = self.maxCrawlers, period = self.period, 

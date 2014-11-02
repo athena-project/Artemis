@@ -194,7 +194,7 @@ class Ressource:
 			times				= self.serializeSimpleList( self.times ),
 			sha512					= self.serializeSimpleList( self.sha512 ),
 			
-			lastUpdate			= self.lastUpdate
+			lastUpdate			= self.lastUpdate,
 			parent				= self.parent
 		)
 	

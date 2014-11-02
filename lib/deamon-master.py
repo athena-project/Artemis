@@ -19,7 +19,7 @@
 # coding: utf-8
 import configparser
 import Url
-import CrawlerMaster 
+import Master 
 
 def configDict2boolDict(cDict):
 	d={}
@@ -29,9 +29,9 @@ def configDict2boolDict(cDict):
 
 
 config = configparser.ConfigParser()
-config.read('conf/master.ini')
+config.read('../conf/master.ini')
 
-master = CrawlerMaster.Master(
+master = Master.Master(
 	useragent		= config['General']['useragent'], 
 	cPort			= int( config['General']['cPort'] ), 
 	port			= int( config['General']['sPort'] ), 
@@ -40,11 +40,7 @@ master = CrawlerMaster.Master(
 	protocolRules	= configDict2boolDict( config['ProtocolRules'] ),
 	originRules		= configDict2boolDict( config['OriginRules'] ),
 	delay 			= int( config['Update']['delay'] ),
-	nSqlUrls		= int( config['Update']['nSqlUrls'] ),
-	nMemUrls		= int( config['Update']['nMemUrls'] ),
-	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
-	maxMemSize		= int( config['UrlHandling']['maxMemSize'] ),
-	parentDir		= config['UrlHandling']['parentDir']
+	maxRamSize		= int( config['UrlHandling']['maxRamSize'] )
 )
 for url in config['Gateway']:
 	master.urlCacheHandler.add( Url.Url(url="http://"+url) )

@@ -18,7 +18,7 @@
 # coding: utf-8
 
 import configparser
-import CrawlerSlave
+import Slave
 
 def configDict2boolDict(cDict):
 	d={}
@@ -28,9 +28,9 @@ def configDict2boolDict(cDict):
 
 
 config = configparser.ConfigParser()
-config.read('conf/slave.ini')
+config.read('../conf/slave.ini')
 
-s=CrawlerSlave.Slave(
+s=Slave.Slave(
 	masterAddress	= config['General']['masterAddress'],
 	useragent		= config['General']['useragent'], 
 	cPort			= int( config['General']['cPort'] ), 
@@ -39,7 +39,7 @@ s=CrawlerSlave.Slave(
 	maxWorkers		= int( config['Thread']['maxWorkers'] ),
 	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
 	delay			= int( config['Update']['delay'] ),
-	maxSavers		= int( config['Overseer']['maxSavers'] )
+	maxCrawler		= int( config['Overseer']['maxCrawler'] )
 )
 
 s.harness()

@@ -83,9 +83,9 @@ class Overseer( Thread ):
 		return True
 	
 	def run(self):
-		if self.action == MasterThread.ACTION_CRAWL:
+		if self.action == Overseer.ACTION_CRAWL:
 			self.crawl()
-		if self.action == MasterThread.ACTION_UPDATE:
+		if self.action == Overseer.ACTION_UPDATE:
 			self.update()
 		
 
@@ -127,10 +127,10 @@ class Master( TcpServer ):
 		self.Exit				= Event()
 		
 	def __del__(self):
-		sefl.Exit.set()
+		self.Exit.set()
 		
 	def crawl(self):
-		master = MasterThread( action = MasterThread.ACTION_CRAWL, cPort = self.cPort,
+		master = Overseer( action = Overseer.ACTION_CRAWL, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
 								period = self.period,
 								delay = self.delay, Exit=self.Exit)
@@ -138,7 +138,7 @@ class Master( TcpServer ):
 		self.listen()
 
 	def update(self):
-		master = MasterThread( action = MasterThread.ACTION_UPDATE, cPort = self.cPort,
+		master = Overseer( action = Overseer.ACTION_UPDATE, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
 								period = self.period, 
 								delay = self.delay, Exit=self.Exit)

@@ -62,8 +62,8 @@ class RobotCacheHandler:
 		
 	def add(self, key):
 		if len(self.data) > self.maxRamElmt :
-			del heappop(self.accessMap)
-		
+			tmp = heappop(self.accessMap)
+			del tmp
 		try:
 			self.data[ key ] = Item( 0, urllib.robotparser.RobotFileParser())
 			self.data[ key ].robot.set_url( key )

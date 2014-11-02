@@ -21,7 +21,7 @@ import SQLFactory
 import RedisFactory
 import hashlib
 import time
-from collection import deque
+from collections import deque
 
 class UrlManager:
 	def __init__(self):
