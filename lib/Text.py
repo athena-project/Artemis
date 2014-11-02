@@ -42,6 +42,25 @@ class TextManager( RessourceManager):
 		
 		return r
 	
+	def getByUrls(self, urls):
+		records	= {}
+		buff	= ""
+		for url in urls:
+			if buff != "":
+				buff+= ","
+			buff += " '"+url+"' "
+		
+		cur = self.con.cursor()
+		cur.execute("SELECT * FROM "+self.table+" WHERE urls IN("+buff+")")
+
+		r=None
+		for row in cur: #url is a unique id
+			r=TextRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11] )
+			records[ row[1] ]	=	r
+		cur.close()
+		
+		return records
+	
 	def insert(self, record):
 		cur = self.con.cursor()
 		cur.execute("INSERT INTO "+self.table+" (url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, chunks, revision, parent)"
@@ -152,15 +171,7 @@ class TextHandler:
 		RessourceHandler.__init__(self)
 	
 	def save(self, text):
-		f = open( "tmp/Texts/"+str(text.id), "w")
-		f.write( text.data )
-		f.close()
-		#SQl
-		#if( text.id == -1):
-			#text.id = self.manager.insert( text.getRecord() )
-		#else:
-			#self.manager.save( text.getRecord() )
-			
+		pass
 		#Data		
 		#cRessource	= libpyRessource.Ressource()
 		#cRessource.setId( text.id )
