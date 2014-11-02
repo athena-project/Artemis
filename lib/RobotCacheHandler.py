@@ -17,7 +17,33 @@
 #
 import time
 import urllib.robotparser
-from collections import deque
+from heapq import *
+
+class Item:
+	def __init__(self, priority, robot):
+		self.priority	= priority
+		self.robot 		= robot
+	
+	def __del__(self):
+		del robot
+		
+	def __eq__(self,y):
+		return self.priority == y.priority
+		
+	def __ge__(self, y): #x.__ge__(y) <==> x>=y
+		return self.priority>=y.priority
+		
+	def __gt__(self, y): # x.__gt__(y) <==> x>y
+		return self.priority>y.priority
+	
+	def  __le__(self, y): # x.__le__(y) <==> x<=y
+		return self.priority<=y.priority
+		
+	def  __lt__(self, y): # x.__lt__(y) <==> x<y
+		return self.priority<y.priority
+		
+	def incr(self):
+		self.priority+=1
 
 class RobotCacheHandler:
 	
@@ -29,44 +55,36 @@ class RobotCacheHandler:
 		"""
 		self.maxRamElmt 	= maxRamElmt
 		
-		self.currentRamElmt	= 0
 		self.lifetime 		= lifetime
 		self.data = {} #url => parser feed
 		
-		self.memId 			= 0 # the hightest id => the latest used robot 
-		self.accessMap		= deque() # (url stack )
-	
+		self.accessMap		= [] # heapq
+		
 	def add(self, key):
-		if self.currentRamElmt  > self.maxRamElmt :
-			self.free( )
-		
-		self.currentRamElmt += 1
-		
+		if len(self.data) > self.maxRamElmt :
+			del heappop(self.accessMap)
 		
 		try:
-			self.data[ key ] = urllib.robotparser.RobotFileParser()
-			self.data[ key ].set_url( key )
-			self.data[ key ].read()
-			self.data[ key ].modified()
-			self.accessMap.append( key )
+			self.data[ key ] = Item( 0, urllib.robotparser.RobotFileParser())
+			self.data[ key ].robot.set_url( key )
+			self.data[ key ].robot.read()
+			self.data[ key ].robot.modified()
+			heappush( self.accessMap, self.data[ key ] )
 		except Exception:
-			self.data[ key ] = None
-		
-	def free(self):
-		i,nbr = 0, self.currentRamElmt // 10
-		while i<nbr:
-			tmp = self.accessMap.popleft()
-			del sel.data[tmp]
-			
+			return False			
+		return True
+
 	def get( self, key ):
 		if key in self.data:
-			if time.time() - self.data[ key ].mtime() < self.lifetime:
-				return self.data[key]
+			self.data[key].incr()
+			if time.time() - self.data[ key ].robot.mtime() < self.lifetime:
+				return self.data[key].robot
 			else:
-				self.data[ key ].read()
-				self.data[ key ].modified()
-				return self.data[key]
+				self.data[ key ].robot.read()
+				self.data[ key ].robot.modified()
+				return self.data[key].robot
 		
-		self.add( key )
-		return self.data[ key ]
-		
+		if self.add( key ):
+			return self.data[ key ].robot
+		else :
+			return None

@@ -24,15 +24,15 @@ from TcpMsg    import TcpMsg
 import UrlCacheHandler
 import Url
 import RobotCacheHandler
-from threading import Thread, RLock
+from threading import Thread, RLock, Event
 
 
 
-
-class MasterThread( Thread ):
+class Overseer( Thread ):
 	ACTION_CRAWL	= 0
 	ACTION_UPDATE	= 1
-	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, nSqlUrls, nMemUrls,delay ):
+	
+	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, delay, Exit ):
 		Thread.__init__(self)
 		
 		
@@ -42,26 +42,26 @@ class MasterThread( Thread ):
 	
 		self.urlCacheHandler	= urlCacheHandler
 		
-		self.nSqlUrls			= nSqlUrls
-		self.nMemUrls			= nMemUrls
 		self.period				= period			
 		self.delay				= delay
 		
 		self.manager 			= Url.UrlManager()
-
+		self.redis				= Url.RedisManager()
+		
+		self.Exit 				= Exit
 	
 	def crawl(self):
-		while True:
+		while not self.Exit.is_set():
 			for slaveAdress in self.slavesAvailable:
 				t = TcpClient( slaveAdress, self.cPort )
-				bundle	= Url.makeCacheBundle(self.urlCacheHandler, MasterThread.secondValidUrl, self.manager,
+				bundle	= Url.makeCacheBundle(self.urlCacheHandler, MasterThread.secondValidUrl, self.redis,
 												self.delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
 				
 				t.send( TcpMsg.T_URL_TRANSFER + bundle)
 				self.slavesAvailable.remove( slaveAdress )
 			time.sleep( self.period )
 	
-	def secondValidUrl(url, cacheHandler, manager, delay):
+	def secondValidUrl(url, cacheHandler, redis, delay):
 		"""
 			Before sending
 		"""	
@@ -74,14 +74,12 @@ class MasterThread( Thread ):
 			
 		#Sql check			
 		try:
-			record = manager.getByUrl( url.url )
-			if record != None and (time.time() - record.lastVisited < delay):
+			lastVisited = redis.get( url.url )
+			if lastVisited != None and (time.time() - lastVisited < delay):
 				return False
 		except Exception:
-			f=open("sql.log", "a")
-			f.write(url.url)
-			f.write("\n")
 			return False
+			
 		return True
 	
 	def run(self):
@@ -97,8 +95,8 @@ class Master( TcpServer ):
 	
 	
 	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, domainRules={"*":False},
-				protocolRules={"*":False}, originRules={"*":False}, delay = 36000, nSqlUrls=100, nMemUrls=100,
-				maxRamSize=100, maxMemSize=1000, parentDir="") :
+				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
+				maxRamSize=100) :
 		"""
 			@domainRules			- domain => true ie allowed False forbiden *=>all
 			@param maxMemRobots		- maximun of robot.txt ept in disk cache
@@ -118,32 +116,32 @@ class Master( TcpServer ):
 		self.originRules		= originRules
 		
 		self.delay				= delay # de maj
-		self.nSqlUrls			= nSqlUrls#number of sql url per update block
-		self.nMemUrls			= nMemUrls
 		
 		self.maxRamSize			= maxRamSize
-		self.maxMemSize			= maxMemSize
-		self.parentDir			= parentDir
 		
-		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler(self.maxRamSize, self.maxMemSize, self.parentDir)
+		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler(self.maxRamSize)
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 		
 		
 		self.initNetworking()
-	
+		self.Exit				= Event()
+		
+	def __del__(self):
+		sefl.Exit.set()
+		
 	def crawl(self):
 		master = MasterThread( action = MasterThread.ACTION_CRAWL, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
-								period = self.period, nSqlUrls = self.nSqlUrls, nMemUrls = self.nMemUrls,
-								delay = self.delay)
+								period = self.period,
+								delay = self.delay, Exit=self.Exit)
 		master.start()
 		self.listen()
 
 	def update(self):
 		master = MasterThread( action = MasterThread.ACTION_UPDATE, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
-								period = self.period, nSqlUrls = self.nSqlUrls, nMemUrls = self.nMemUrls,
-								delay = self.delay)
+								period = self.period, 
+								delay = self.delay, Exit=self.Exit)
 		master.start()
 		
 		self.listen()
@@ -203,5 +201,3 @@ class Master( TcpServer ):
 		for url in urls :
 			if self.firstValidUrl( url ):
 				self.urlCacheHandler.add( url ) 
-			else:
-				pass

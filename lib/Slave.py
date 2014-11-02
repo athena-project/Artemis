@@ -28,9 +28,102 @@ import Ressource
 from contentTypeRules import *
 import hashlib
 
+from collection import deque
 
-class WorkerThread( Thread ):
-	def __init__(self, urlsLock=None, urls=[], newUrls=[], contentTypes={"*":False}, delay=86400, manager=None, waitingRessources=[]):
+
+
+		
+class Sender( Thread ):
+	def __init__(self, masterAddress, cPort, newUrls, Exit):
+		Thread.__init__(self)
+		self.masterAddress	= masterAddress
+		self.cPort			= cPort
+		self.newUrls		= newUrls
+		self.Exit			= Exit
+	
+	def run(self):
+		while not self.Exist.is_set():
+			t = TcpClient( self.masterAddress, self.cPort )
+			while self.newUrls :
+				t.send( TcpMsg.T_URL_TRANSFER + 
+					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
+			
+			time.sleep(1)
+
+				
+class CrawlerOverseer( Thread ):
+	def __init__(self, masterAddress, useragent, cPort, maxWorkers, period, urls, contentTypes, delay, waitingRessources, Exit):
+		Thread.__init__(self)
+		self.masterAddress		= masterAddress
+		self.useragent			= useragent
+		self.cPort				= cPort
+			
+		self.period				= period
+		self.maxWorkers 		= maxWorkers
+		
+		self.workers 			= []
+		
+		self.newUrls			= []
+		self.urls				= urls
+		self.contentTypes		= contentTypes
+		self.delay				= delay
+
+		self.urlsLock 			= RLock()
+		
+		self.manager			= Url.UrlManager()
+		self.redis				= Url.RedisManager()
+
+		self.waitingRessources	= waitingRessources #waiting for sql saving
+		
+		self.Exist				= Exist
+
+	def __del__(self):
+		self.Exit.set()
+	
+	def pruneWorkers(self):
+		i=0
+		while i<len(self.workers) :
+			if not self.workers[i].is_alive():
+				del self.workers[i]
+			i+=1
+	
+	def harness(self):		
+		minUrls = 2 * self.maxWorkers
+		t = TcpClient( self.masterAddress, self.cPort )
+		
+		
+		while not self.Exit.is_set():
+			if len(self.urls) < minUrls:		
+				t.send( TcpMsg.T_PENDING )
+
+			while self.urls :
+				if len(self.urls) < minUrls:
+					t.send( TcpMsg.T_PENDING )
+				
+				n = self.maxWorkers-self.aliveWorkers
+				if n>0 :
+					i=0
+					while i<n :
+						#try :
+						w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
+											contentTypes=self.contentTypes, delay=self.delay, manager=self.manager,
+											waitingRessources=self.waitingRessources, self.Exit )
+						self.workers.append( w )
+						self.aliveWorkers += 1
+						w.start()
+						i+=1
+						#except Exception:
+							#pass
+						
+				time.sleep( self.period ) 
+				self.pruneWorkers()
+			time.sleep( self.period ) 
+		
+	def run(self):
+		self.harness()		
+
+class Crawler( Thread ):
+	def __init__(self, urlsLock=None, urls=deque(), newUrls=deque(), contentTypes={"*":False}, delay=86400, manager=None, waitingRessources={}, Exit=Event()):
 		"""
 		"""
 		Thread.__init__(self)
@@ -42,13 +135,14 @@ class WorkerThread( Thread ):
 		self.manager 			= manager
 				
 		self.waitingRessources	= waitingRessources
-	
+		self.Exit 				= Exit
+		
 	def run(self):
-		while True:
+		while not self.Exit.is_set():
 			with self.urlsLock:
 				if not self.urls :
 					return None
-				url = self.urls.pop()
+				url = self.urls.popleft()
 			
 			self.dispatch( url )
 
@@ -58,67 +152,57 @@ class WorkerThread( Thread ):
 		urlObject = urlparse( url.url )	
 		if( urlObject.scheme == "http" or urlObject.scheme == "https"):
 			self.http( url, urlObject )
-		#if( urlObject.scheme == "ftp" or urlObject.scheme == "ftps"):
-		#	self.ftp( url )
-		else :
-			pass
-			#log
 			
 	def http( self, url, urlObj ):
-		#print("under way")
 		try:
 			r = request.urlopen( url.url )	
 		except :
-			#log
-			#print("failes")	
 			return
-		#ContentType 
-		cT = r.getheader("Content-Type")
-		#print("under way2")
+		
 		#Statut check
 		if( r.status != 200 ):
 			return 
 			
-			
+		#ContentType 
+		cT = r.getheader("Content-Type")	
 		t = time.time()
+		
 		#ContentType parsing
 		cTl=cT.split(";")
 		contentType	= cTl[0].strip()
-		charset		= "UTF-8"
+		
+
+		##Chek contentType
+		if contentType in self.contentTypes:
+			if not self.contentTypes[contentType]:
+				return 
+		elif (not self.contentTypes["*"]) or (contentType not in contentTypeRules):
+			return 
+		
+		data = r.read()
+		
+		#Hash
+		m_sha512 = hashlib.sha512()
+		m_sha512.update(data)
+		h_sha512 = m_sha512.hexdigest()
+		
+		
 		if len(cT)>1:
 			charset = cTl[1].split("=")
 			if len(charset)>1:
 				charset	= charset[1].strip()
 			else:
 				charset = charset[0].strip()
-
-		##Chek contentType
-		if contentType in self.contentTypes:
-			if not self.contentTypes[contentType]:
-				return 
-		elif not self.contentTypes["*"]:
-			return 
-		elif contentType not in contentTypeRules:
-			#log
-			return 
-		
-		#print("content type ok")
-		data = r.read()
-		#Hash
-		m_sha512 = hashlib.sha512()
-		m_sha512.update(data)
-		h_sha512 = m_sha512.hexdigest()
-		
-		data				= str(data.decode(charset.lower()))
+			data = str(data.decode(charset.lower()))
 
 		#UrlRecord hydrating
 		urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
-		urlRecord.lastsha512		= h_sha512
-		urlRecord.lastVisited	= t
 		
 		with self.urlsLock:
 			try:
-				self.manager.save( urlRecord )
+				if self.redis.get( url ) == None :
+					self.manager.save( urlRecord )
+				self.redis.set( url, t)
 			except Exception as e:
 				return
 		
@@ -126,14 +210,16 @@ class WorkerThread( Thread ):
 		ressource					= rTypes[ rType ][0]()
 		ressource.url				= url.url
 		ressource.data				= data
-		self.newUrls.extend( ressource.extractUrls( urlObj ) )
 		self.waitingRessources.append( [rType, cT, url.url, urlObj.netloc, data, t, h_sha512] )
-	#def ftp( self, url):
-	#	r = request.urlopen( url)	
-	#	if( r.status == 200 ):
-	#		
-	#	else:
-	#		#log
+		
+		urls = ressource.extractUrls( urlObj )
+		for url in urls :
+			tmp = self.redis.get( url )
+			if  tmp == None or tmp:
+			self.newUrls.extend(  )
+
+		
+	
 	
 	def save(self, url, urlObj, urlRecord, cT, data):
 		#print("begin false save")
@@ -170,21 +256,18 @@ class WorkerThread( Thread ):
 		self.newUrls.extend( ressource.extractUrls( urlObj ) )
 		t = time.time()-t
 		#print(t)
-		
-class UrlSender( Thread ):
-	def __init__(self, masterAddress, cPort, newUrls):
-		Thread.__init__(self)
-		self.masterAddress	= masterAddress
-		self.cPort			= cPort
-		self.newUrls		= newUrls
-	
-	def run(self):
-		while True:
-			t = TcpClient( self.masterAddress, self.cPort )
-			while self.newUrls :
-				t.send( TcpMsg.T_URL_TRANSFER + 
-					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
-			time.sleep(1)
+
+
+
+
+
+
+
+
+
+
+
+
 
 class SQLHandler( Thread ):							
 	def __init__(self, managers, number, waitingRessources, ressources):	#number per insert, update
@@ -388,7 +471,7 @@ class Slave( TcpServer ):
 		self.delay			= delay
 		
 		self.contentTypes	= contentTypes
-		self.urls			= []
+		self.urls			= deque()
 		
 		self.maxSavers		= maxSavers
 		t = TcpClient( masterAddress, self.cPort )

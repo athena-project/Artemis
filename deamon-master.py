@@ -15,10 +15,11 @@
 #  
 #	@autor Severus21
 #
-# coding: utf-8
 
+# coding: utf-8
 import configparser
-import CrawlerSlave
+import Url
+import CrawlerMaster 
 
 def configDict2boolDict(cDict):
 	d={}
@@ -28,18 +29,23 @@ def configDict2boolDict(cDict):
 
 
 config = configparser.ConfigParser()
-config.read('../conf/slave.ini')
+config.read('conf/master.ini')
 
-s=CrawlerSlave.Slave(
-	masterAddress	= config['General']['masterAddress'],
+master = CrawlerMaster.Master(
 	useragent		= config['General']['useragent'], 
 	cPort			= int( config['General']['cPort'] ), 
 	port			= int( config['General']['sPort'] ), 
 	period			= int( config['General']['period'] ), 
-	maxWorkers		= int( config['Thread']['maxWorkers'] ),
-	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
-	delay			= int( config['Update']['delay'] ),
-	maxSavers		= int( config['Overseer']['maxSavers'] )
+	domainRules		= configDict2boolDict( config['DomainRules'] ),
+	protocolRules	= configDict2boolDict( config['ProtocolRules'] ),
+	originRules		= configDict2boolDict( config['OriginRules'] ),
+	delay 			= int( config['Update']['delay'] ),
+	nSqlUrls		= int( config['Update']['nSqlUrls'] ),
+	nMemUrls		= int( config['Update']['nMemUrls'] ),
+	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
+	maxMemSize		= int( config['UrlHandling']['maxMemSize'] ),
+	parentDir		= config['UrlHandling']['parentDir']
 )
-
-s.harness()
+for url in config['Gateway']:
+	master.urlCacheHandler.add( Url.Url(url="http://"+url) )
+master.crawl()

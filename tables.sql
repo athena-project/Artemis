@@ -24,9 +24,7 @@ CREATE TABLE `urlrecord` (
   `id` BIGINT(11) NOT NULL AUTO_INCREMENT,
   `protocol` varchar(256), 
   `domain` varchar(256),
-  `url` text(4096),
-  `lastSha512` varchar(128),
-  `lastVisited` double,
+  `url` text(4096)
   PRIMARY KEY (`id`),
   UNIQUE key_url (`url`(50))
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;

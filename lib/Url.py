@@ -18,8 +18,10 @@
 from urllib.parse import urlparse
 
 import SQLFactory
-
-
+import RedisFactory
+import hashlib
+import time
+from collection import deque
 
 class UrlManager:
 	def __init__(self):
@@ -77,16 +79,32 @@ class UrlManager:
 			self.update( record )
 		else:
 			self.insert( record )
+	
+	
+class RedisManager:
+	def __init__(self):
+		self.con = RedisFactory.getConn()
+	
+	def get( self, url):
+		m_sha1 = hashlib.sha1()
+		m_sha1.update(url)
+		h_sha1 = m_sha1.hexdigest()
+		
+		return self.con.get(  'urlrecord_'+h_sha1 )
+	
+	def add( self, url):
+		m_sha1 = hashlib.sha1()
+		m_sha1.update(url)
+		h_sha1 = m_sha1.hexdigest()
+		
+		self.con.get(  'urlrecord_'+h_sha1 , time.time())
 		
 class UrlRecord:
-	def __init__(self, id=-1, protocol="", domain="", url="", lastSha512="", lastVisited=0):
+	def __init__(self, id=-1, protocol="", domain="", url=""):
 		self.id 			= int(id)
 		self.protocol		= protocol
 		self.domain 		= domain
 		self.url 			= url
-		self.lastSha512		= lastSha512
-		self.lastVisited 	= float( lastVisited )
-		#relatedRessource= peewee.TextField() #type(link to an sql table):id
 
 class Url:
 	def __init__(self,url, o="", t="", charset="", alt=""):
@@ -163,7 +181,7 @@ def makeBundle(urls, maxSize):
 	i, bundle = 0, ""
 	 
 	while i<maxSize and urls :
-		url = urls.pop()
+		url = urls.popleft()
 		url.serialize()
 		if url.serializeSize() + i >= maxSize:
 			i=maxSize
