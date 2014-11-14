@@ -13,7 +13,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #  
-#	@autor Severus21
+#	@author Severus21
 #
 
 import time
@@ -33,6 +33,15 @@ class Overseer( Thread ):
 	ACTION_UPDATE	= 1
 	
 	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, delay, Exit ):
+		"""
+			@param	action			- CRAWL or UPDATE( will crawl again urls already visited )
+			@param	cPort			- port used by the TcpClient to send a piece of work
+			@param	slavesAvailable - ips of the slaves waiting to working 
+			@param	urlCacheHandler - 
+			@param	period 			- period between to wake up
+			@param	delay 			- period between two crawl of the same page
+			@param	Exit 			- stop condition( an event share with Master, when Master die it is set to true )
+		"""
 		Thread.__init__(self)
 		
 		
@@ -51,6 +60,9 @@ class Overseer( Thread ):
 		self.Exit 				= Exit
 	
 	def crawl(self):
+		"""
+			@brief	The core function, it will dispatch work to the slaves
+		"""
 		while not self.Exit.is_set():
 			for slaveAdress in self.slavesAvailable:
 				
@@ -64,7 +76,7 @@ class Overseer( Thread ):
 	
 	def secondValidUrl(url, cacheHandler, redis, delay):
 		"""
-			Before sending
+			@brief	a second validation, because during url storage, the current url may have been visited by a slave
 		"""	
 		if( url == None):
 			return False
@@ -100,9 +112,16 @@ class Master( TcpServer ):
 				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
 				maxRamSize=100) :
 		"""
-			@domainRules			- domain => true ie allowed False forbiden *=>all
-			@param maxMemRobots		- maximun of robot.txt ept in disk cache
-			@param urlsPerSlave		- 
+			@param useragent		- 
+			@param cPort			- port used by the TcpClient to send a piece of work
+			@param port				- port used by the TcpServer 
+			@param period			- period between to wake up
+			@param domainRules		- { "domain1" : bool (true ie allowed False forbiden) }, "*" is the default rule
+			@param protocolRules	- { "protocol1" : bool (true ie allowed False forbiden) }, "*" is the default protocol
+			@param originRules		- { "origin1" : bool (true ie allowed False forbiden) }, "*" is the default origin,
+				the origin is the parent balise of the url
+			@param delay			- period between two crawl of the same page
+			@param maxRamSize		- maxsize of the urls list kept in ram( in Bytes )
 		"""
 		self.cPort				= cPort #client port
 		TcpServer.__init__(self, port)				 #server port
@@ -138,15 +157,6 @@ class Master( TcpServer ):
 								delay = self.delay, Exit=self.Exit)
 		master.start()
 		self.listen()
-
-	def update(self):
-		master = Overseer( action = Overseer.ACTION_UPDATE, cPort = self.cPort,
-								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
-								period = self.period, 
-								delay = self.delay, Exit=self.Exit)
-		master.start()
-		
-		self.listen()
 		
 	### Network ###
 	def process(self, type, data, address):
@@ -163,7 +173,11 @@ class Master( TcpServer ):
 	### Url Handling ###
 	def firstValidUrl(self, url):
 		"""
-			Before adding to cache
+			@brief			- it will chek 
+				if the url match the domainRules, the protocolRules, the originRules,
+				if the url is already in cache 
+				if the url has been already visited during the "past delay"
+				
 		"""
 		#Check in ram
 		if( self.urlCacheHandler.exists( url ) ):
@@ -199,6 +213,10 @@ class Master( TcpServer ):
 		return True
 		
 	def addUrls(self, data ):
+		"""
+			@bried 			- serialize the data before adding the extracted files in cache
+			@param	data	- 
+		"""
 		urls = Url.unserializeList( data[1:] )
 		for url in urls :
 			if self.firstValidUrl( url ):
