@@ -22,7 +22,7 @@ import SQLFactory
 import hashlib
 import time
 
-#import libpyRessource
+import libpyRessource
 
 
 class TextManager( RessourceManager):
@@ -51,7 +51,7 @@ class TextManager( RessourceManager):
 			buff += " '"+url+"' "
 		
 		cur = self.con.cursor()
-		cur.execute("SELECT * FROM "+self.table+" WHERE urls IN("+buff+")")
+		cur.execute("SELECT * FROM "+self.table+" WHERE url IN("+buff+")")
 
 		r=None
 		for row in cur: #url is a unique id
@@ -171,12 +171,12 @@ class TextHandler:
 		RessourceHandler.__init__(self)
 	
 	def save(self, text):
-		pass
+		#pass
 		#Data		
-		#cRessource	= libpyRessource.Ressource()
-		#cRessource.setId( text.id )
-		#cRessource.setCurrentRevision( text.revision )
-		#cRessource.setChunkIdsFromList( text.chunks )
+		cRessource	= libpyRessource.Ressource()
+		cRessource.setId( text.id )
+		cRessource.setCurrentRevision( text.revision )
+		cRessource.setChunkIdsFromList( text.chunks )
 		
-		#cRessourceHandler = libpyRessource.RessourceHandler()
-		#cRessourceHandler.newRevision(cRessource, text.data)
+		cRessourceHandler = libpyRessource.RessourceHandler()
+		cRessourceHandler.newRevision(cRessource, text.data)

@@ -25,7 +25,8 @@ class Item:
 		self.robot 		= robot
 	
 	def __del__(self):
-		del robot
+		if self.robot :
+			del self.robot
 		
 	def __eq__(self,y):
 		return self.priority == y.priority

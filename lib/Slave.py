@@ -41,12 +41,17 @@ class Sender( Thread ):
 		self.newUrls		= newUrls
 		self.Exit			= Exit
 	
+	def __del__(self):
+		print( "Sender end")
+	
 	def run(self):
-		while not self.Exist.is_set():
+		while not self.Exit.is_set():
 			t = TcpClient( self.masterAddress, self.cPort )
+
 			while self.newUrls :
-				t.send( TcpMsg.T_URL_TRANSFER + 
-					Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) )
+				bundle	= Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) 
+				t.send( TcpMsg.T_URL_TRANSFER + bundle)
+			
 			
 			time.sleep(1)
 
@@ -76,10 +81,12 @@ class CrawlerOverseer( Thread ):
 
 		self.waitingRessources	= waitingRessources #waiting for sql saving
 		
-		self.Exist				= Exist
+		self.Exit				= Exit
+		
 
 	def __del__(self):
 		self.Exit.set()
+		print( "CrawlerOverseer end")
 	
 	def pruneCrawlers(self):
 		i=0
@@ -100,14 +107,14 @@ class CrawlerOverseer( Thread ):
 			while self.urls :
 				if len(self.urls) < minUrls:
 					t.send( TcpMsg.T_PENDING )
-				
+
 				n = self.maxCrawlers-len(self.crawlers)
 				if n>0 :
 					i=0
 					while i<n :
-						w = WorkerThread( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
+						w = Crawler( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
 											contentTypes=self.contentTypes, delay=self.delay, manager=self.manager,
-											waitingRessources=self.waitingRessources, Exit = self.Exit )
+											redis=self.redis, waitingRessources=self.waitingRessources, Exit = self.Exit )
 						self.crawlers.append( w )
 						w.start()
 						i+=1
@@ -117,7 +124,7 @@ class CrawlerOverseer( Thread ):
 			time.sleep( self.period ) 
 
 class Crawler( Thread ):
-	def __init__(self, urlsLock=None, urls=deque(), newUrls=deque(), contentTypes={"*":False}, delay=86400, manager=None, waitingRessources={}, Exit=Event()):
+	def __init__(self, urlsLock=None, urls=deque(), newUrls=deque(), contentTypes={"*":False}, delay=86400, manager=None, redis=None, waitingRessources={}, Exit=Event()):
 		"""
 		"""
 		Thread.__init__(self)
@@ -127,10 +134,11 @@ class Crawler( Thread ):
 		self.contentTypes		= contentTypes 
 		self.delay				= delay
 		self.manager 			= manager
+		self.redis 				= redis
 				
 		self.waitingRessources	= waitingRessources
 		self.Exit 				= Exit
-		
+
 	def run(self):
 		while not self.Exit.is_set():
 			with self.urlsLock:
@@ -153,7 +161,7 @@ class Crawler( Thread ):
 			r = request.urlopen( url.url )	
 		except :
 			return
-		
+
 		#Statut check
 		if( r.status != 200 ):
 			return 
@@ -193,15 +201,17 @@ class Crawler( Thread ):
 		#UrlRecord hydrating
 		urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
 		
+
+		
 		with self.urlsLock:
 			try:
-				if self.redis.get( url ) == None :
+				if self.redis.get( url.url ) == 0 :
 					self.manager.save( urlRecord )
-				self.redis.set( url, t)
+				self.redis.add( url.url, t)
 			except Exception as e:
 				return
 		
-		rType						=  contentTypeRules[ contentType ] 
+		rType						= contentTypeRules[ contentType ] 
 		ressource					= rTypes[ rType ][0]()
 		ressource.url				= url.url
 		ressource.data				= data
@@ -210,8 +220,8 @@ class Crawler( Thread ):
 		
 		urls = ressource.extractUrls( urlObj )
 		for url in urls :
-			tmp = self.redis.get( url )
-			if  tmp == None or (time.time() - time > delay):
+			tmpLast = self.redis.get( url.url )
+			if time.time() - tmpLast > self.delay:
 				self.newUrls.append( url )
 
 
@@ -229,15 +239,19 @@ class SQLHandler( Thread ):
 		for rType in rTypes :
 			self.managers[rType] = rTypes[rType][2]( self.conn )
 		
-	def preprocessing(self, rType, waitingRessources):
+	def __del__(self):
+		print( "SQLHandler end")
+		
+	def preprocessing(self, rType):
 		wrs, urls, i=[], [], 0
 		insertRessource, updateRessource =[], []
-		
+
 		while i<self.number:
-			wrs.append( waitingRessources.popleft() )
+			wrs.append( self.waitingRessources[rType].popleft() )
 			urls.append( wrs[-1][1] )
+			i+=1
 		
-		records	= self.managers[rType].getListByUrl(urls = urls)
+		records	= self.managers[rType].getByUrls(urls = urls)
 		
 		j = 0
 		while j<self.number:
@@ -247,25 +261,24 @@ class SQLHandler( Thread ):
 				updateRessource.append( ressource )
 			else:
 				insertRessource.append( ressource )
-				
-			ressource.url					= url
-			ressource.domain				= domain
-			ressource.sizes.append(			len(data ) ) 
-			ressource.contentTypes.append( 	cT ) 
-			ressource.times.append( 		time.time() )
-			ressource.sha512.append(	 	h_sha512  )
-			ressource.lastUpdate			= t
-			ressource.data				= data
+
+			ressource.url					= wrs[j][1]
+			ressource.domain				= wrs[j][2]
+			ressource.sizes.append(			len(wrs[j][3] ) ) 
+			ressource.contentTypes.append( 	wrs[j][0] ) 
+			ressource.times.append( 		wrs[j][4] )
+			ressource.sha512.append(	 	wrs[j][5]  )
+			ressource.lastUpdate			= wrs[j][4]
+			ressource.data					= wrs[j][3]
 			j+=1
-	
+		return (insertRessource, updateRessource)
+		
 	def run(self):
 		while not self.Exit.is_set():
-			self.preprocessing( self.number )
-			for rType in self.records :
-				waitingRessources	= self.waitingRessources[rType]
-				
-				while( len( waitingRessources ) > self.number ):
-					(insertRessources, updateRessources) = self.preprocessing( rType, waitingRessources )
+			for rType in self.waitingRessources :
+
+				while( len( self.waitingRessources[rType] ) > self.number ):
+					(insertRessources, updateRessources) = self.preprocessing( rType )
 					insertRecords, updateRecords	= [], []
 					
 					for r in insertRessources:
@@ -288,48 +301,65 @@ class SQLHandler( Thread ):
 										
 			time.sleep( 1 );
 
+import sys
+def Worker(input):
+	handlers		= {}
+	rType,ressource = "", None
+	for k in rTypes:
+		handlers[k]= rTypes[k][3]()
+	i=0
+	
+	while rType != 'STOP':
+		while not input.empty():
+			try:
+				rType,ressource	= input.get()
+				if rType != 'STOP':
+					print( i)
+					i+=1
+					handlers[rType].save( ressource ) 
+			except:
+				rType, ressource = "", None
+		
+		time.sleep(1)
+	
 
 class WorkerOverseer(Thread):
 	def __init__(self, ressources={}, maxWorkers=1, Exit=Event() ):
 		Thread.__init__(self);
-		self.ressource	= ressources
+		self.ressources	= ressources
 		self.maxWorkers	= maxWorkers
 		self.Exit 		= Exit
 		
 		self.task_queue = Queue()
-		#self.done_queue = Queue()
-		
-		self.handlers		= {}
-		for k in rTypes:
-			self.handlers[k]= rTypes[k][3]()
 
 	def __del__(self):
 		i=0 
-		while i<maxWorkers:
-			task_queue.put('STOP')
-	
+		while i<self.maxWorkers:
+			self.task_queue.put( ('STOP',None) )
+			
+		print( "WorkerOverseer end")
+		
 	def run(self):
 		i=0
 		while i<self.maxWorkers:
-			Process(target=self.worker, args=self.task_queue).start()
-		
+			Process(target=Worker, args= (self.task_queue,) ).start()
+			i+=1
+			
 		while not self.Exit.is_set():
 			for rType in self.ressources:
 				while self.ressources[ rType ] :
-					self.task_queue.put( (rType, self.ressources[key].popleft() ) )
-			time.sleep( 1 )
-			
-	def worker(input):
-		for rType, ressource in iter(input.get, 'STOP'):
-			self.handlers[rType].save( ressource ) 
+					self.task_queue.put( (rType, self.ressources[rType].popleft() ) )
 
+			time.sleep( 1 )
 
 class Slave( TcpServer ):
 	"""
 		@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
 	"""
+	Exit	= Event()
+	
 	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxWorkers=2, contentTypes={"*":False},
-		delay=86400, maxCrawlers=1) :
+		delay=86400, maxCrawlers=1, sqlNumber=100) :
 		TcpServer.__init__(self, port)	
 			
 		self.masterAddress	= masterAddress
@@ -355,9 +385,12 @@ class Slave( TcpServer ):
 		self.urls				= deque()
 		self.newUrls			= deque()
 		
-		self.waitingRessource	= {}
+		self.waitingRessources	= {}
 		self.ressources			= {}
-	
+		for k in rTypes:
+			self.waitingRessources[k]	= deque()
+			self.ressources[k]			= deque()
+		
 	def __del__(self):
 		self.Exit.set()
 	

@@ -43,7 +43,7 @@ CREATE TABLE `text` (
   `sizes` text,
   `contentTypes` text,
   `times` text,
-  `has512` varchar(128),
+  `sha512` varchar(128),
   `lastUpdate` double,
   `chunks` text,
   `revision` INT,

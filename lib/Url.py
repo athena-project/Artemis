@@ -20,7 +20,6 @@ from urllib.parse import urlparse
 import SQLFactory
 import RedisFactory
 import hashlib
-import time
 from collections import deque
 
 class UrlManager:
@@ -55,10 +54,9 @@ class UrlManager:
 	
 	def insert(self, record):
 		cur = self.con.cursor()
-		cur.execute("INSERT INTO urlrecord (protocol, domain, url, lastSha512, lastVisited) VALUES ('"+record.protocol+
-					"', '"+record.domain+"', '"+record.url+"', '"+record.lastSha512+"', '"+str(record.lastVisited)+"')"+
-					" ON DUPLICATE KEY UPDATE protocol=VALUES(protocol), domain=VALUES(domain), url=VALUES(url), "
-					+" lastSha512=VALUES(lastSha512), lastVisited=VALUES(lastVisited)")
+		cur.execute("INSERT INTO urlrecord (protocol, domain, url) VALUES ('"+record.protocol+
+					"', '"+record.domain+"', '"+record.url+"')"+
+					" ON DUPLICATE KEY UPDATE protocol=VALUES(protocol), domain=VALUES(domain), url=VALUES(url)")
 		self.con.commit()
 		if( record.id < 1):
 			record.id = cur.lastrowid
@@ -87,17 +85,22 @@ class RedisManager:
 	
 	def get( self, url):
 		m_sha1 = hashlib.sha1()
-		m_sha1.update(url)
+		m_sha1.update( url.encode() )
 		h_sha1 = m_sha1.hexdigest()
 		
-		return self.con.get(  'urlrecord_'+h_sha1 )
+		tmp = self.con.get(  'urlrecord_'+h_sha1 )
+		
+		if tmp != None :
+			return float( tmp )
+		else :
+			return 0
 	
-	def add( self, url):
+	def add( self, url, time):
 		m_sha1 = hashlib.sha1()
-		m_sha1.update(url)
+		m_sha1.update( url.encode() )
 		h_sha1 = m_sha1.hexdigest()
 		
-		self.con.get(  'urlrecord_'+h_sha1 , time.time())
+		self.con.set(  'urlrecord_'+h_sha1 , time)
 		
 class UrlRecord:
 	def __init__(self, id=-1, protocol="", domain="", url=""):
@@ -194,7 +197,7 @@ def makeBundle(urls, maxSize):
 
 def makeCacheBundle(cacheHandler, fValid, manager, delay, maxSize):
 	bundle = ""
-	urlsSize = cacheHandler.currentRamSize + cacheHandler.currentMemSize
+	urlsSize = cacheHandler.currentRamSize
 	i,n = 0,0
 	
 	while i<urlsSize and i<maxSize and not cacheHandler.empty():

@@ -39,7 +39,8 @@ s=Slave.Slave(
 	maxWorkers		= int( config['Thread']['maxWorkers'] ),
 	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
 	delay			= int( config['Update']['delay'] ),
-	maxCrawler		= int( config['Overseer']['maxCrawler'] )
+	maxCrawlers		= int( config['Thread']['maxCrawlers'] ),
+	sqlNumber		= int( config['SQL']['number'] )
 )
 
 s.harness()

@@ -53,8 +53,9 @@ class Overseer( Thread ):
 	def crawl(self):
 		while not self.Exit.is_set():
 			for slaveAdress in self.slavesAvailable:
+				
 				t = TcpClient( slaveAdress, self.cPort )
-				bundle	= Url.makeCacheBundle(self.urlCacheHandler, MasterThread.secondValidUrl, self.redis,
+				bundle	= Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
 												self.delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
 				
 				t.send( TcpMsg.T_URL_TRANSFER + bundle)
@@ -67,19 +68,20 @@ class Overseer( Thread ):
 		"""	
 		if( url == None):
 			return False
-			
+
 		#Check in ram
 		if( cacheHandler.exists( url ) ):
 			return False
-			
-		#Sql check			
+
+		#Sql check	
 		try:
-			lastVisited = redis.get( url.url )
-			if lastVisited != None and (time.time() - lastVisited < delay):
+			lastVisited = redis.get( url.url ) 
+			if time.time() - lastVisited < delay:
 				return False
 		except Exception:
 			return False
-			
+
+
 		return True
 	
 	def run(self):
