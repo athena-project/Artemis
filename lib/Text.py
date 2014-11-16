@@ -96,6 +96,7 @@ class TextManager( RessourceManager):
 		for record in records:
 			if buff != "":
 				buff+=", "
+
 			buff += "('"+str(record.id)+"', '"+record.url+"', '"+record.domain+"', '"+record.relatedRessources+"', '"+record.sizes
 			buff += "', '"+record.contentTypes+"', '"+record.times+"', '"+record.sha512+"', '"+str(record.lastUpdate)
 			buff += "', '"+record.chunks+"', '"+str(record.revision)+"', '"+str(record.parent)+"')"
@@ -155,7 +156,7 @@ class Text( Ressource ):
 			sizes				= self.serializeSimpleList( self.sizes),
 			contentTypes		= self.serializeSimpleList( self.contentTypes),
 			times				= self.serializeSimpleList( self.times),
-			sha512					= self.serializeSimpleList( self.sha512),
+			sha512				= self.serializeSimpleList( self.sha512),
 			
 			lastUpdate			= self.lastUpdate,
 			parent				= self.parent,
@@ -169,14 +170,16 @@ class Text( Ressource ):
 class TextHandler:
 	def __init__(self):
 		RessourceHandler.__init__(self)
+		self.p_cManager	= libpyRessource.ChunkManager.create()
+		self.cHandler	= libpyRessource.RessourceHandler( self.p_cManager )
 	
 	def save(self, text):
-		#pass
-		#Data		
 		cRessource	= libpyRessource.Ressource()
 		cRessource.setId( text.id )
 		cRessource.setCurrentRevision( text.revision )
 		cRessource.setChunkIdsFromList( text.chunks )
-		
-		cRessourceHandler = libpyRessource.RessourceHandler()
-		cRessourceHandler.newRevision(cRessource, text.data)
+
+		self.cHandler.newRevision(cRessource, text.data)
+		text.chunks = cRessource.getChunkIdsList()
+
+		RessourceHandler.save(self,text)

@@ -226,12 +226,13 @@ class Crawler( Thread ):
 
 
 class SQLHandler( Thread ):							
-	def __init__(self,  number, waitingRessources, ressources, Exit):	#number per insert, update
-		Thread.__init__(self);
+	def __init__(self,  number, waitingRessources, ressources, postRessources, Exit):	#number per insert, update
+		Thread.__init__(self); 
 		self.managers 			= {}
 		self.number				= number;
 		self.waitingRessources	= waitingRessources #waiting for sql
 		self.ressources			= ressources		#waiting for disk 
+		self.postRessources		= postRessources#saved on disk 
 		
 		self.Exit				= Exit
 		
@@ -276,7 +277,6 @@ class SQLHandler( Thread ):
 	def run(self):
 		while not self.Exit.is_set():
 			for rType in self.waitingRessources :
-
 				while( len( self.waitingRessources[rType] ) > self.number ):
 					(insertRessources, updateRessources) = self.preprocessing( rType )
 					insertRecords, updateRecords	= [], []
@@ -296,27 +296,41 @@ class SQLHandler( Thread ):
 					if updateRecords:
 						self.managers[rType].updateList( updateRecords );
 					
-					self.ressources[rType].extend( insertRessources);
-					self.ressources[rType].extend( updateRessources);
-										
+					
+					for ressource in insertRessources:
+						if not ressource.saved:
+							self.ressources[rType].append( ressource );
+					
+					for ressource in updateRessources:
+						if not ressource.saved:
+							self.ressources[rType].append( ressource );
+			
+			for rType in self.postRessources :		
+				while( len( self.postRessources[rType] ) > self.number ):
+					i,records = 0,[]
+					while i<self.number :
+						records.append( (self.postRessources[rType].popleft()).getRecord() )
+						i+=1
+							
+					self.managers[rType].updateList( records );
+					
+					
 			time.sleep( 1 );
 
 import sys
-def Worker(input):
+def Worker(input, output):
 	handlers		= {}
 	rType,ressource = "", None
 	for k in rTypes:
 		handlers[k]= rTypes[k][3]()
-	i=0
-	
+
 	while rType != 'STOP':
 		while not input.empty():
 			try:
 				rType,ressource	= input.get()
 				if rType != 'STOP':
-					print( i)
-					i+=1
 					handlers[rType].save( ressource ) 
+					output.put( (rType,ressource) )
 			except:
 				rType, ressource = "", None
 		
@@ -324,13 +338,15 @@ def Worker(input):
 	
 
 class WorkerOverseer(Thread):
-	def __init__(self, ressources={}, maxWorkers=1, Exit=Event() ):
+	def __init__(self, postRessources={}, ressources={}, maxWorkers=1, Exit=Event() ):
 		Thread.__init__(self);
-		self.ressources	= ressources
-		self.maxWorkers	= maxWorkers
-		self.Exit 		= Exit
+		self.postRessources	= postRessources
+		self.ressources			= ressources
+		self.maxWorkers			= maxWorkers
+		self.Exit 				= Exit
 		
-		self.task_queue = Queue()
+		self.task_queue 		= Queue()
+		self.done_queue 		= Queue()
 
 	def __del__(self):
 		i=0 
@@ -342,10 +358,14 @@ class WorkerOverseer(Thread):
 	def run(self):
 		i=0
 		while i<self.maxWorkers:
-			Process(target=Worker, args= (self.task_queue,) ).start()
+			Process(target=Worker, args= (self.task_queue,self.done_queue) ).start()
 			i+=1
 			
 		while not self.Exit.is_set():
+			while not self.done_queue.empty():
+				rType,ressource	= self.done_queue.get()
+				self.postRessources[rType].append(ressource)
+
 			for rType in self.ressources:
 				while self.ressources[ rType ] :
 					self.task_queue.put( (rType, self.ressources[rType].popleft() ) )
@@ -387,9 +407,11 @@ class Slave( TcpServer ):
 		
 		self.waitingRessources	= {}
 		self.ressources			= {}
+		self.postRessources		= {}
 		for k in rTypes:
 			self.waitingRessources[k]	= deque()
 			self.ressources[k]			= deque()
+			self.postRessources[k]		= deque()
 		
 	def __del__(self):
 		self.Exit.set()
@@ -404,8 +426,8 @@ class Slave( TcpServer ):
 										waitingRessources = self.waitingRessources, newUrls = self.newUrls, Exit = self.Exit)
 		
 		self.sqlHandler	= SQLHandler( number = self.sqlNumber, waitingRessources = self.waitingRessources,
-										ressources = self.ressources, Exit = self.Exit)
-		self.workerOverseer	= WorkerOverseer( ressources = self.ressources, maxWorkers = self.maxWorkers, Exit = self.Exit )
+										ressources = self.ressources, postRessources=self.postRessources, Exit = self.Exit)
+		self.workerOverseer	= WorkerOverseer( postRessources = self.postRessources, ressources = self.ressources,  maxWorkers = self.maxWorkers, Exit = self.Exit )
 		
 		self.sqlHandler.start()
 		self.workerOverseer.start()

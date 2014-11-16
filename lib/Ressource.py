@@ -112,7 +112,7 @@ class Ressource:
 		self.parent		= -1
 		
 		self.data = ""
-		
+		self.saved=False # False never been saved by RessourceHandler, True yes
 	def hydrate(self, record):
 		if record == None:
 			return 
@@ -203,8 +203,4 @@ class RessourceHandler:
 		pass
 	
 	def save(self, ressource):
-		pass
-		#SQl
-		#self.manager.insert( ressource.getRecord() )
-		
-		#Data		
+		ressource.saved = True		

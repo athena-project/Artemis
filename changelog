@@ -3,10 +3,13 @@
 0.2.0
 	Asynchronous SQL and disk writing
 0.2.1
-	Memory leeks correction
+	Memory leaks correction
 	Stat module added
 0.2.2
 	Optimisation SQL check, and url request
 	Use of redis for some SQL task
 1.0.0-a 
 	New architecture pattern for Slave.py and Master.py
+
+1.0.1
+	Bug fix : ressource post-saving sql added
