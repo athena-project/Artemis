@@ -13,3 +13,6 @@
 
 1.0.1
 	Bug fix : ressource post-saving sql added
+
+1.0.2
+	Bug fix : chunks' ids add in SQL during the post-saving phase
