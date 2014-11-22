@@ -32,7 +32,8 @@ from TcpClient import TcpClient
 from TcpMsg import TcpMsg 
 	
 from contentTypeRules import *
-		
+import logging
+
 class Sender( Thread ):
 	def __init__(self, masterAddress, cPort, newUrls, Exit):
 		"""
@@ -49,7 +50,7 @@ class Sender( Thread ):
 		self.Exit			= Exit
 	
 	def __del__(self):
-		print( "Sender end")
+		logging.info("Sender stopped")
 	
 	def run(self):
 		while not self.Exit.is_set():
@@ -106,7 +107,7 @@ class CrawlerOverseer( Thread ):
 
 	def __del__(self):
 		self.Exit.set()
-		print( "CrawlerOverseer end")
+		logging.info("CrawlerOverseer stopped")
 	
 	def pruneCrawlers(self):
 		i=0
@@ -270,7 +271,7 @@ class SQLHandler( Thread ):
 		self.number				= number;
 		self.waitingRessources	= waitingRessources #waiting for sql
 		self.ressources			= ressources		#waiting for disk 
-		self.postRessources		= postRessources#saved on disk 
+		self.postRessources		= postRessources	#saved on disk 
 		
 		self.Exit				= Exit
 		
@@ -279,7 +280,7 @@ class SQLHandler( Thread ):
 			self.managers[rType] = rTypes[rType][2]( self.conn )
 		
 	def __del__(self):
-		print( "SQLHandler end")
+		logging.info("SQLHandler stopped")
 		
 	def preprocessing(self, rType):
 		"""
@@ -377,7 +378,7 @@ def Worker(input, output):
 				if rType != 'STOP':
 					handlers[rType].save( ressource ) 
 					output.put( (rType,ressource) )
-			except:
+			except Exception:
 				rType, ressource = "", None
 		
 		time.sleep(1)
@@ -473,7 +474,6 @@ class Slave( TcpServer ):
 			self.waitingRessources[k]	= deque()
 			self.ressources[k]			= deque()
 			self.postRessources[k]		= deque()
-		
 	def __del__(self):
 		self.Exit.set()
 	

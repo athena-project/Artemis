@@ -18,7 +18,12 @@
 # coding: utf-8
 
 import configparser
+import logging
 import Slave
+
+
+logging.basicConfig(filename="/var/log/artemis/error.log", format='%(asctime)s  %(levelname)s  %(message)s',
+	level=logging.INFO)
 
 def configDict2boolDict(cDict):
 	d={}

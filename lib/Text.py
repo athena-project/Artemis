@@ -193,6 +193,13 @@ class TextHandler:
 		self.cHandler	= libpyRessource.RessourceHandler( self.p_cManager )
 	
 	def save(self, text):
+		#f = open("reb/index", "a")
+		#f.write(str(text.id)+" "+text.url+"\n")
+		#f.close()
+
+		#f2 = open("reb/pages/"+str(text.id), "w") 
+		#f2.write(text.data)
+		#f2.close()
 		cRessource	= libpyRessource.Ressource()
 		cRessource.setId( text.id )
 		cRessource.setCurrentRevision( text.revision )

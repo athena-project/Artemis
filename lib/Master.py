@@ -26,8 +26,7 @@ import Url
 import RobotCacheHandler
 from threading import Thread, RLock, Event
 from collections import deque
-
-
+import logging
 
 
 class Overseer( Thread ):
@@ -135,7 +134,8 @@ class Master( TcpServer ):
 		self.useragent 			= useragent
 		self.period				= period # delay(second) betwen two crawl
 		
-		
+		#logger.debug("Hello")
+
 		self.slavesAvailable	= deque() #address1,..
 		
 		self.domainRules		= domainRules
@@ -150,7 +150,6 @@ class Master( TcpServer ):
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 		
 		self.numOverseer		= numOverseer
-		print(self.numOverseer)
 		self.initNetworking()
 		self.lock				= RLock()
 		self.Exit				= Event()

@@ -18,8 +18,12 @@
 
 # coding: utf-8
 import configparser
+import logging
 import Url
 import Master 
+
+logging.basicConfig(filename="/var/log/artemis/error.log", format='%(asctime)s  %(levelname)s  %(message)s',
+	level=logging.INFO)
 
 def configDict2boolDict(cDict):
 	d={}
@@ -41,7 +45,7 @@ master = Master.Master(
 	originRules		= configDict2boolDict( config['OriginRules'] ),
 	delay 			= int( config['Update']['delay'] ),
 	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
-	numOverseer	= int( config['General']['numOverseer'] )
+	numOverseer		= int( config['General']['numOverseer'] )
 )
 for url in config['Gateway']:
 	master.urlCacheHandler.add( Url.Url(url="http://"+url) )
