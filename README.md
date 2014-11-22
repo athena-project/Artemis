@@ -5,8 +5,11 @@ Collectes raw data from multiple sources : mainly the Web. Fully write in python
 Needed dependencies
 ===================
   -Python3.3 or highter
+  
   -A redis server
+  
   -A  SQL sever
+  
   -Mnemosyne
 
 Install
