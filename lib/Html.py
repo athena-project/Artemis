@@ -81,13 +81,14 @@ class HtmlHandler( TextHandler ):
 		TextHandler.__init__(self)
 		
 class Html( Text ):
-	"""
-	"""
-	
 	def __init__(self):
 		Text.__init__(self)
 	
 	def extractUrls(self, parentUrl):
+		"""
+			@param parentUrl	- 
+			@brief	Extracts all the urls of self.data
+		"""
 		p = HTMLParser(parentUrl)
 		p.feed( self.data )
 		p.close()

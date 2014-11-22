@@ -20,6 +20,9 @@ import SQLFactory
 
 class RessourceManager:
 	def __init__(self, con=None):
+		"""
+			@brief manage the SQL request 
+		"""
 		self.con = con if con != None else SQLFactory.getConn()
 		self.table	= ""
 		
@@ -80,9 +83,10 @@ class RessourceManager:
 			self.insert( record )
 	
 class RessourceRecord:
-	"""
-	"""
 	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", sha512="", lastUpdate="", parent=""):
+		"""
+			@brief represents a ressource object, used to sql save
+		"""
 		self.id 				= int(id)
 		self.url 				= url
 		self.domain 			= domain
@@ -95,9 +99,10 @@ class RessourceRecord:
 		self.parent				= int( parent ) #urlrecord id parent
 
 class Ressource:
-	"""
-	"""
 	def __init__(self):
+		"""
+			@brief	represents a web ressource, abstract class
+		"""
 		self.id = -1
 		self.url = ""
 		self.domain = ""
@@ -113,11 +118,15 @@ class Ressource:
 		
 		self.data = ""
 		self.saved=False # False never been saved by RessourceHandler, True yes
+	
 	def hydrate(self, record):
+		"""
+			@param record	- see RessourceRecord
+			@brief builds an object ressource from a recordRessource
+		"""
 		if record == None:
 			return 
-		#for key in record.__dict__ :
-			#setattr(self, key, getattr(record, key) )
+			
 		self.id 				= record.id
 		self.url				= record.url
 		self.domain				= record.domain

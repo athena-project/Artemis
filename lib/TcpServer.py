@@ -28,11 +28,10 @@ import select
 from TcpMsg import TcpMsg
 
 class TcpServer:
-	"""
-	
-	"""
-	
 	def __init__(self, port):
+		"""
+			@param	port	- port to listen
+		"""
 		self.sock = None
 		self.clientsConnected = []
 		self.port = port
@@ -105,54 +104,5 @@ class TcpServer:
 					outputs.remove(s)
 				s.close()
 					
-					
-					
-					
-					
-					
-					
-					
-					
-
-	#Data is a string
 	def process(self, type, data, address):
 		pass
-
-	def listen2(self):
-		while True :
-			connectionRequested, wlist, xlist = select.select([self.sock],[], [], 60)
-			
-			for connexion in connectionRequested:
-				connexion_avec_client, infos_connexion = connexion.accept()
-				# On ajoute le socket connecté à la liste des clients
-				connexion_avec_client.setblocking(0)
-				self.clientsConnected.append(connexion_avec_client)
-				
-			self.ready_to_read, self.ready_to_write, self.in_error = [], [], []
-			try:
-				self.ready_to_read, self.ready_to_write, self.in_error = select.select( self.clientsConnected, [], [], 60)
-			except select.error:
-				pass
-			except Exception as e:
-				print("Exception", e)
-				pass
-			else:
-				i = 0
-				# On parcourt la liste des clients à lire
-				for client in self.ready_to_read:
-					buffer = client.recv( TcpMsg.T_BUFFER_SIZE )
-					data = buffer.decode()
-					j, size= TcpMsg.T_BUFFER_SIZE, TcpMsg.getSize( data )
-					
-					if not len( buffer ):	
-						client.close()
-						if( len(self.clientsConnected) > 0 ):
-							self.clientsConnected.pop( i )
-					else:	
-						while j<size:
-							buffer = client.recv( TcpMsg.T_BUFFER_SIZE )
-							data += buffer.decode()
-							j+=TcpMsg.T_BUFFER_SIZE
-											
-						self.process( data[:TcpMsg.T_TYPE_SIZE], data[TcpMsg.T_TYPE_SIZE:], client.getpeername() )
-					i+=1

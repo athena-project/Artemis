@@ -35,6 +35,13 @@ from contentTypeRules import *
 		
 class Sender( Thread ):
 	def __init__(self, masterAddress, cPort, newUrls, Exit):
+		"""
+			@param masterAddress	- ip adress of the master server
+			@param cPort 			- port used by the TcpClient to send a block of newly collected urls
+			@param newUrls			- deque which contains the urls collected by the crawlers
+			@param Exit 			- stop condition( an event share with Slave, when Slave die it is set to true )
+			@brief Send the collected urls to the master
+		"""
 		Thread.__init__(self)
 		self.masterAddress	= masterAddress
 		self.cPort			= cPort
@@ -59,6 +66,20 @@ class Sender( Thread ):
 class CrawlerOverseer( Thread ):
 	def __init__(self, masterAddress, useragent, cPort, maxCrawlers, period, urls, contentTypes, delay, 
 		waitingRessources, newUrls, Exit):
+		"""
+			@param masterAddress		- ip adress of the master server
+			@param useragent			- 
+			@param cPort 				- port used by the TcpClient to send a block of newly collected urls
+			@param maxCrawlers			- maximun number of crawlers
+			@param period				- period between to wake up
+			@param urls					- deque which contains the urls received from the master
+			@param contentTypes			- dict of allowed content type (in fact allowed rType cf.contentTypeRules.py)
+			@param delay				- period between two crawl of the same page
+			@param waitingRessources	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
+			@param newUrls				- deque which contains the urls collected by the crawlers
+			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
+			@brief Creates and monitors the crawlers
+		"""
 		Thread.__init__(self)
 		self.masterAddress		= masterAddress
 		self.useragent			= useragent
@@ -76,10 +97,9 @@ class CrawlerOverseer( Thread ):
 
 		self.urlsLock 			= RLock()
 		
-		self.manager			= Url.UrlManager()
 		self.redis				= Url.RedisManager()
 
-		self.waitingRessources	= waitingRessources #waiting for sql saving
+		self.waitingRessources	= waitingRessources
 		
 		self.Exit				= Exit
 		
@@ -109,23 +129,30 @@ class CrawlerOverseer( Thread ):
 					t.send( TcpMsg.T_PENDING )
 
 				n = self.maxCrawlers-len(self.crawlers)
-				if n>0 :
-					i=0
-					while i<n :
-						w = Crawler( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
-											contentTypes=self.contentTypes, delay=self.delay, manager=self.manager,
-											redis=self.redis, waitingRessources=self.waitingRessources, Exit = self.Exit )
-						self.crawlers.append( w )
-						w.start()
-						i+=1
+				for i in range(0,n):
+					w = Crawler( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
+										contentTypes=self.contentTypes, delay=self.delay, redis=self.redis,
+										waitingRessources=self.waitingRessources, Exit = self.Exit )
+					self.crawlers.append( w )
+					w.start()
 
 				time.sleep( self.period ) 
 				self.pruneCrawlers()
 			time.sleep( self.period ) 
 
 class Crawler( Thread ):
-	def __init__(self, urlsLock=None, urls=deque(), newUrls=deque(), contentTypes={"*":False}, delay=86400, manager=None, redis=None, waitingRessources={}, Exit=Event()):
+	def __init__(self, urlsLock=None, urls=deque(), newUrls=deque(), contentTypes={"*":False}, delay=86400, redis=None, 
+		waitingRessources={}, Exit=Event()):
 		"""
+			@param urlsLock	- RLock with to secure access to urls
+			@param urls					- deque which contains the urls received from the master
+			@param newUrls				- deque which contains the urls collected by the crawlers
+			@param contentTypes			- dict of allowed content type (in fact allowed rType cf.contentTypeRules.py)
+			@param delay				- period between two crawl of the same page
+			@param redis				- a redis handler
+			@param waitingRessources	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
+			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
+			@brief Will get ressources from the web, and will add data to waitingRessources and collected urls to newUrls
 		"""
 		Thread.__init__(self)
 		self.urlsLock			= urlsLock
@@ -144,7 +171,6 @@ class Crawler( Thread ):
 			with self.urlsLock:
 				if not self.urls :
 					time.sleep( 1 ) 
-					return None
 				url = self.urls.popleft()
 			
 			self.dispatch( url )
@@ -152,11 +178,20 @@ class Crawler( Thread ):
 				
 	### Network handling ###
 	def dispatch(self, url):
+		"""
+			@param url	-
+			@brief selects the right function to  handle the protocl corresponding to the current url( http, ftp etc..)
+		"""
 		urlObject = urlparse( url.url )	
 		if( urlObject.scheme == "http" or urlObject.scheme == "https"):
 			self.http( url, urlObject )
 			
 	def http( self, url, urlObj ):
+		"""
+			@param url		-	
+			@param urlObj	- ParseResult (see urllib.parse), which represents the current url
+			@brief connects to  the remote ressource and get it
+		"""
 		try:
 			r = request.urlopen( url.url )	
 		except :
@@ -198,18 +233,10 @@ class Crawler( Thread ):
 				charset = charset[0].strip()
 			data = str(data.decode(charset.lower()))
 
-		#UrlRecord hydrating
-		urlRecord=Url.UrlRecord( protocol=urlObj.scheme, domain=urlObj.netloc, url=url.url )
-		
-
 		
 		with self.urlsLock:
-			try:
-				if self.redis.get( url.url ) == 0 :
-					self.manager.save( urlRecord )
-				self.redis.add( url.url, t)
-			except Exception as e:
-				return
+			self.redis.add( url.url, t)
+
 		
 		rType						= contentTypeRules[ contentType ] 
 		ressource					= rTypes[ rType ][0]()
@@ -218,6 +245,7 @@ class Crawler( Thread ):
 		
 		self.waitingRessources[rType].append( [cT, url.url, urlObj.netloc, data, t, h_sha512] )
 		
+		#Collected and adding new urls
 		urls = ressource.extractUrls( urlObj )
 		for url in urls :
 			tmpLast = self.redis.get( url.url )
@@ -227,6 +255,15 @@ class Crawler( Thread ):
 
 class SQLHandler( Thread ):							
 	def __init__(self,  number, waitingRessources, ressources, postRessources, Exit):	#number per insert, update
+		"""
+			@param number				-
+			@param waitingRessources	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
+			@param ressources			- preprocessed ressources (see SQLHandler.preprocessing )
+			@param postRessources		- ressources already inserted in SQL db, analyzed by worker and waiting for an SQL update
+			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
+			@brief handle sql requests, inserts newly collected ressources, and updates analysed ones
+		"""
+		
 		Thread.__init__(self); 
 		self.managers 			= {}
 		self.number				= number;
@@ -244,6 +281,10 @@ class SQLHandler( Thread ):
 		print( "SQLHandler end")
 		
 	def preprocessing(self, rType):
+		"""
+			@param rType	- see contentTypeRules.py
+			@brief 
+		"""
 		wrs, urls, i=[], [], 0
 		insertRessource, updateRessource =[], []
 
@@ -317,8 +358,12 @@ class SQLHandler( Thread ):
 					
 			time.sleep( 1 );
 
-import sys
 def Worker(input, output):
+	"""
+		@param input	- multiprocessing.Queue, ressources which must be analyzed
+		@param input	- multiprocessing.Queue, ressources already analyzed
+		@brief	
+	"""
 	handlers		= {}
 	rType,ressource = "", None
 	for k in rTypes:
@@ -339,6 +384,13 @@ def Worker(input, output):
 
 class WorkerOverseer(Thread):
 	def __init__(self, postRessources={}, ressources={}, maxWorkers=1, Exit=Event() ):
+		"""
+			@param postRessources		- ressources already inserted in SQL db, analyzed by worker and waiting for an SQL update
+			@param maxWorkers			- maximun number of workers handled by this overseer
+			@param ressources			- preprocessed ressources (see SQLHandler.preprocessing )
+			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
+			@brief Creates and feeds worker's instance, and adding worker's output to postRessources
+		"""
 		Thread.__init__(self);
 		self.postRessources	= postRessources
 		self.ressources			= ressources
@@ -373,13 +425,21 @@ class WorkerOverseer(Thread):
 			time.sleep( 1 )
 
 class Slave( TcpServer ):
-	"""
-		@param contentTypes 	- content types allowed ( {contentType = charset(def="", ie all charset allowed)})
-	"""
-	Exit	= Event()
-	
 	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxWorkers=2, contentTypes={"*":False},
 		delay=86400, maxCrawlers=1, sqlNumber=100) :
+		"""
+			@param masterAddress	- ip adress of the master server
+			@param useragent		- 
+			@param cPort 			- port used by the TcpClient to send a block of newly collected urls
+			@param port				- port used by the TcpServer 
+			@param period			- period between to wake up
+			@param maxWorkers		- maximun number of workers handled by an instance of WorkerOverseer
+			@param contentTypes		- dict of allowed content type (in fact allowed rType cf.contentTypeRules.py)
+			@param delay			- period between two crawl of the same page
+			@param maxCrawlers		- maximun number of crawlers handled by an instance of CrawlerOverseer
+			@param sqlNumber		-
+			@brief
+		"""
 		TcpServer.__init__(self, port)	
 			
 		self.masterAddress	= masterAddress
@@ -436,7 +496,6 @@ class Slave( TcpServer ):
 		
 		self.listen()
 	
-	### Network ###
 	def process(self, type, data, address):
 		if type == TcpMsg.T_DONE:
 			pass
@@ -444,6 +503,5 @@ class Slave( TcpServer ):
 		if type == TcpMsg.T_URL_TRANSFER:
 			self.addUrls( data )
 	
-	### CrawlerThread handling ###
 	def addUrls(self, data ):
 		self.urls.extend( Url.unserializeList( data ) )	

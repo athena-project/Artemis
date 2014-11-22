@@ -21,6 +21,11 @@ from heapq import *
 
 class Item:
 	def __init__(self, priority, robot):
+		"""	
+			@param	priority	-
+			@param	robot 		-
+			@brief Object use to represent robot in heapq( priority queue)
+		"""
 		self.priority	= priority
 		self.robot 		= robot
 	
@@ -48,11 +53,10 @@ class Item:
 
 class RobotCacheHandler:
 	
-	def __init__(self, maxRamElmt=10000, lifetime=3600):
+	def __init__(self, maxRamElmt=10000, lifetime=36000):
 		"""
-			@param maxRamSize	-
-			@param maxMemSize
-			@param
+			@param maxRamElmt	- maximun number of robot.txt objects saved in ram
+			@param liftime		- lifetime( second ) of a robot object before updating
 		"""
 		self.maxRamElmt 	= maxRamElmt
 		

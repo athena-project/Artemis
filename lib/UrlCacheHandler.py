@@ -22,9 +22,8 @@ class UrlCacheHandler:
 	
 	def __init__(self, maxRamSize=10000):
 		"""
-			Warning !!!!! Do not use with thread .....................;
-			@param maxRamSize	-
-
+			@param maxRamSize	- max size of the current cache( bytes )
+			@brief provides a kind of dict limited in space, no thread safe
 		"""
 		self.maxRamSize 	= maxRamSize
 		self.currentRamSize	= 0

@@ -25,6 +25,8 @@ import UrlCacheHandler
 import Url
 import RobotCacheHandler
 from threading import Thread, RLock, Event
+from collections import deque
+
 
 
 
@@ -32,7 +34,7 @@ class Overseer( Thread ):
 	ACTION_CRAWL	= 0
 	ACTION_UPDATE	= 1
 	
-	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, delay, Exit ):
+	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, delay, lock, Exit ):
 		"""
 			@param	action			- CRAWL or UPDATE( will crawl again urls already visited )
 			@param	cPort			- port used by the TcpClient to send a piece of work
@@ -40,6 +42,7 @@ class Overseer( Thread ):
 			@param	urlCacheHandler - 
 			@param	period 			- period between to wake up
 			@param	delay 			- period between two crawl of the same page
+			@param lock				- RLock object
 			@param	Exit 			- stop condition( an event share with Master, when Master die it is set to true )
 		"""
 		Thread.__init__(self)
@@ -65,9 +68,9 @@ class Overseer( Thread ):
 		"""
 		while not self.Exit.is_set():
 			for slaveAdress in self.slavesAvailable:
-				
 				t = TcpClient( slaveAdress, self.cPort )
-				bundle	= Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
+				with self.lock:
+					bundle	= Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
 												self.delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
 				
 				t.send( TcpMsg.T_URL_TRANSFER + bundle)
@@ -76,6 +79,10 @@ class Overseer( Thread ):
 	
 	def secondValidUrl(url, cacheHandler, redis, delay):
 		"""
+			@param url				-	
+			@param cacheHandler		- url cacheHandler
+			@param redis			- a redis handler
+			@param delay 			- delay between two update for an url
 			@brief	a second validation, because during url storage, the current url may have been visited by a slave
 		"""	
 		if( url == None):
@@ -85,12 +92,9 @@ class Overseer( Thread ):
 		if( cacheHandler.exists( url ) ):
 			return False
 
-		#Sql check	
-		try:
-			lastVisited = redis.get( url.url ) 
-			if time.time() - lastVisited < delay:
-				return False
-		except Exception:
+		#Redis check
+		lastVisited = redis.get( url.url ) 
+		if time.time() - lastVisited < delay:
 			return False
 
 
@@ -110,7 +114,7 @@ class Master( TcpServer ):
 	
 	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, domainRules={"*":False},
 				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
-				maxRamSize=100) :
+				maxRamSize=100, numOverseer=1) :
 		"""
 			@param useragent		- 
 			@param cPort			- port used by the TcpClient to send a piece of work
@@ -122,6 +126,7 @@ class Master( TcpServer ):
 				the origin is the parent balise of the url
 			@param delay			- period between two crawl of the same page
 			@param maxRamSize		- maxsize of the urls list kept in ram( in Bytes )
+			@param numOverseer		- 
 		"""
 		self.cPort				= cPort #client port
 		TcpServer.__init__(self, port)				 #server port
@@ -130,7 +135,7 @@ class Master( TcpServer ):
 		self.period				= period # delay(second) betwen two crawl
 		
 		
-		self.slavesAvailable	= [] #address1,..
+		self.slavesAvailable	= deque() #address1,..
 		
 		self.domainRules		= domainRules
 		self.protocolRules		= protocolRules
@@ -145,16 +150,18 @@ class Master( TcpServer ):
 		
 		
 		self.initNetworking()
+		self.lock				= RLock()
 		self.Exit				= Event()
 		
 	def __del__(self):
 		self.Exit.set()
 		
 	def crawl(self):
-		master = Overseer( action = Overseer.ACTION_CRAWL, cPort = self.cPort,
+		for i in range(0, self.numberOverseer):
+			master = Overseer( action = Overseer.ACTION_CRAWL, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
 								period = self.period,
-								delay = self.delay, Exit=self.Exit)
+								delay = self.delay, lock=self.lock, Exit=self.Exit)
 		master.start()
 		self.listen()
 		

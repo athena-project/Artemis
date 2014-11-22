@@ -57,7 +57,7 @@ class HashRecord:
 	"""
 	def __init__(self, id=-1, hash="", rType=R_TYPE_RESSOURCE):
 		"""
-			@param rType	- type de la ressource(text, html, etc..) chaine de deux octets
+			@param rType	- 
 		"""
 		self.id 				= int(id)
 		self.hash 				= hash

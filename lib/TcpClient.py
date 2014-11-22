@@ -21,11 +21,11 @@ import time
 from TcpMsg import TcpMsg
 
 class TcpClient:
-	"""
-	
-	"""
-	
 	def __init__(self, h, p):
+		"""
+			@param h	- 
+			@parm  p 	- port listen by the host
+		"""
 		self.sock = None
 		self.lastMsg = None;
 		self.connected = False ;
@@ -34,16 +34,11 @@ class TcpClient:
 		
 		
 	def __del__(self):
-		pass
-		#self.initNetworking()
-		#self.sock.send( TcpMsg.T_DECO.encode() )
-		#self.sock.close()
+		self.sock.close()
 
-	# A surcharger, virtual
 	def getUrls(self, msg):
 		pass
 	
-	#Data is a string , for child class
 	def process(self, data):
 		msg = pickle.load( data )
 		assert isinstance(msg, TcpMsg)
@@ -63,13 +58,7 @@ class TcpClient:
 		self.sock.connect( (self.host, self.port) )
 		
 	def send(self, msg):
-		#Begin 
 		self.initNetworking()
 		self.lastMsg = msg
 		self.sock.sendall( msg.encode() )
 		self.sock.close()
-		
-		#End 
-		#self.initNetworking()
-		#self.sock.send(  TcpMsg.T_DONE.encode() )
-		#self.sock.close()

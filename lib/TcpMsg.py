@@ -54,34 +54,3 @@ class TcpMsg:
 			return TcpMsg.T_URL_TRANSFER_SIZE
 		
 		return 0
-	
-class TcpMsgHandler:
-	"""
-	"""
-	def __init__(self):
-		pass
-		
-	def serializeUrl(self, d):
-		return d['url']+"|"+d['alt']+"|"+d['charset']+"|"+d['type']
-			
-	def make( urls ):
-		msgs= []
-		size = 0
-		tmpSize = 0
-		i=0
-		
-		for url in urls:
-			tmpSize= 3+url['url'] +3+url['alt']+7+url['charset']+4+url['type']
-			if( size == 0):
-				msgs.append( T_URL_TRANSFER )
-				i+=1
-				
-			if( tmpSize + size < TcpMsg.T_URL_TRANSFER_SIZE ):
-				size += tmpSize
-				msgs[i]+="||"+serializeUrl(url)+"||"
-				
-			else:
-				size=tmpSize
-				i+=1
-				msgs.append( T_URL_TRANSFER+"||"+serializeUrl(url)+"||" )
-		return msgs

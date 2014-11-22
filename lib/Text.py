@@ -27,8 +27,24 @@ import libpyRessource
 
 class TextManager( RessourceManager):
 	def __init__(self, con=None):
+		"""
+			@brief see Ressource.RessourceManager
+		"""
 		RessourceManager.__init__(self, con)
 		self.table		= "text"
+	
+	
+	def get(self, number, offset=0):
+		cur = self.con.cursor()
+		cur.execute("SELECT * FROM "+self.table+" ORDER BY id LIMIT "+number+" OFFSET "+offset)
+		
+		records=[]
+		for row in cur: 
+			r=TextRecord( row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11] )
+			records.append( r )
+		cur.close()
+		
+		return records
 	
 	
 	def getByUrl(self, url):
@@ -124,16 +140,19 @@ class TextManager( RessourceManager):
 class TextRecord( RessourceRecord ):
 	def __init__(self, id=-1, url="", domain="", relatedRessources="", sizes="", contentTypes="", times="", sha512="", lastUpdate="", 
 	chunks="", revision="", parent=""):
+		"""
+			@brief see Ressource.RessourceRecord
+		"""
 		RessourceRecord.__init__(self, id, url, domain, relatedRessources, sizes, contentTypes, times, sha512, lastUpdate, parent)
 		self.chunks		= chunks
 		self.revision 	= int(revision)
 
 
 class Text( Ressource ):
-	"""
-	"""
-	
 	def __init__(self):
+		"""
+			@brief see Ressource.Ressource
+		"""
 		Ressource.__init__(self)
 		self.chunks		= []
 		self.revision  	= 0 #number of revision

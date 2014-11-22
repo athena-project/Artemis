@@ -16,3 +16,5 @@
 
 1.0.2
 	Bug fix : chunks' ids add in SQL during the post-saving phase
+1.0.3
+	Multiple overseers in master added

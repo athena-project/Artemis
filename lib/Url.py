@@ -22,67 +22,14 @@ import RedisFactory
 import hashlib
 from collections import deque
 
-class UrlManager:
-	def __init__(self):
-		self.con = SQLFactory.getConn()
-	
-	def __del__(self):
-		pass
-		#self.con.close()
-		
-	def getByUrl(self, url):
-		cur = self.con.cursor()
-		cur.execute("SELECT * FROM urlrecord WHERE url='"+url+"'")
-
-		r=None
-		for row in cur: #url is a unique id
-			r=UrlRecord( row[0], row[1], row[2], row[3], row[4], row[5] )
-			cur.close()
-			return r
-		return r
-		
-	def getBysha512(self, sha512):
-		l=[]
-		
-		cur = self.con.cursor()
-		cur.execute("SELECT * FROM urlrecord WHERE sha512='"+sha512+"'")
-		for row in cur:
-			l.append( UrlRecord( row[0], row[1], row[2], row[3], row[4], row[5] ) )
-		cur.close()
-		
-		return l
-	
-	def insert(self, record):
-		cur = self.con.cursor()
-		cur.execute("INSERT INTO urlrecord (protocol, domain, url) VALUES ('"+record.protocol+
-					"', '"+record.domain+"', '"+record.url+"')"+
-					" ON DUPLICATE KEY UPDATE protocol=VALUES(protocol), domain=VALUES(domain), url=VALUES(url)")
-		self.con.commit()
-		if( record.id < 1):
-			record.id = cur.lastrowid
-		
-		cur.close()
-		return record.id
-		
-	def update(self, record):
-		cur = self.con.cursor()
-		cur.execute("UPDATE urlrecord SET protocol:='"+record.protocol+"', domain:='"+record.domain+"', url:='"+record.url+
-					"', lastSha512:='"+record.lastSha512+"', lastVisited:='"+str(record.lastVisited)+"' WHERE id='"+str(record.id)+"'" )
-		
-		self.con.commit()
-		cur.close()
-		
-	def save(self, record):
-		if record.id>-1:
-			self.update( record )
-		else:
-			self.insert( record )
-	
 	
 class RedisManager:
 	def __init__(self):
+		"""
+			@brief provide an interface between redis and url-object
+		"""
 		self.con = RedisFactory.getConn()
-	
+		
 	def get( self, url):
 		m_sha1 = hashlib.sha1()
 		m_sha1.update( url.encode() )
@@ -102,20 +49,19 @@ class RedisManager:
 		
 		self.con.set(  'urlrecord_'+h_sha1 , time)
 		
-class UrlRecord:
-	def __init__(self, id=-1, protocol="", domain="", url=""):
-		self.id 			= int(id)
-		self.protocol		= protocol
-		self.domain 		= domain
-		self.url 			= url
-
 class Url:
 	def __init__(self,url, o="", t="", charset="", alt=""):
+		"""
+			@param o		- describes the parent balise of the current url
+			@param t		- content type if provided(optionally with charset)
+			@param charset	- 
+			@param alt		- description of the link if provided
+		"""
 		self.origin 	= o
 		self.url		= url
 		
 		t = t.split(";")
-		self.type 		= t[0].strip() # contentType withour charset
+		self.type 		= t[0].strip() # contentType without charset
 		if len(t)>1 and (not charset):
 			charset = t[1].split("=")
 			if len(charset)>1:
@@ -179,7 +125,9 @@ def unserializeList(s):
 
 def makeBundle(urls, maxSize):
 	"""
-		@param maxSize			- in octetss
+		@param urls				- a deque of urls
+		@param maxSize			- in bytes
+		@brief Prepare a bundle of urls to sending 
 	"""
 	i, bundle = 0, ""
 	 
@@ -195,14 +143,21 @@ def makeBundle(urls, maxSize):
 			bundle	+=url
 	return bundle
 
-def makeCacheBundle(cacheHandler, fValid, manager, delay, maxSize):
+def makeCacheBundle(cacheHandler, fValid, redis, delay, maxSize):
+	"""
+		@param cacheHandler		- see UrlCacheHandler.py
+		@param redis			- a redis handler
+		@param delay 			- delay between two update for an url
+		@param maxSize			- in bytes
+		@brief Prepare a bundle of urls to sending, from urlCacheHandler
+	"""
 	bundle = ""
 	urlsSize = cacheHandler.currentRamSize
 	i,n = 0,0
 	
 	while i<urlsSize and i<maxSize and not cacheHandler.empty():
 		url = cacheHandler.get()
-		if not fValid( url, cacheHandler, manager, delay):
+		if not fValid( url, cacheHandler, redis, delay):
 			pass
 		elif url.serializeSize() + i > maxSize:
 			i=maxSize
@@ -213,5 +168,3 @@ def makeCacheBundle(cacheHandler, fValid, manager, delay, maxSize):
 			bundle	+=url
 	
 	return bundle
-
-	
