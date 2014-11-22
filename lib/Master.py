@@ -57,9 +57,9 @@ class Overseer( Thread ):
 		self.period				= period			
 		self.delay				= delay
 		
-		self.manager 			= Url.UrlManager()
 		self.redis				= Url.RedisManager()
 		
+		self.lock				= lock
 		self.Exit 				= Exit
 	
 	def crawl(self):
@@ -67,15 +67,16 @@ class Overseer( Thread ):
 			@brief	The core function, it will dispatch work to the slaves
 		"""
 		while not self.Exit.is_set():
-			for slaveAdress in self.slavesAvailable:
+			try:
+				slaveAdress = self.slavesAvailable.popleft()
 				t = TcpClient( slaveAdress, self.cPort )
 				with self.lock:
 					bundle	= Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
 												self.delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
-				
+
 				t.send( TcpMsg.T_URL_TRANSFER + bundle)
-				self.slavesAvailable.remove( slaveAdress )
-			time.sleep( self.period )
+			except Exception :
+				time.sleep( self.period )
 	
 	def secondValidUrl(url, cacheHandler, redis, delay):
 		"""
@@ -111,7 +112,7 @@ class Master( TcpServer ):
 	"""
 	"""
 	
-	
+	Exit				= Event()
 	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, domainRules={"*":False},
 				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
 				maxRamSize=100, numOverseer=1) :
@@ -148,7 +149,8 @@ class Master( TcpServer ):
 		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler(self.maxRamSize)
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 		
-		
+		self.numOverseer		= numOverseer
+		print(self.numOverseer)
 		self.initNetworking()
 		self.lock				= RLock()
 		self.Exit				= Event()
@@ -157,12 +159,12 @@ class Master( TcpServer ):
 		self.Exit.set()
 		
 	def crawl(self):
-		for i in range(0, self.numberOverseer):
+		for i in range(0, self.numOverseer):
 			master = Overseer( action = Overseer.ACTION_CRAWL, cPort = self.cPort,
 								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
 								period = self.period,
 								delay = self.delay, lock=self.lock, Exit=self.Exit)
-		master.start()
+			master.start()
 		self.listen()
 		
 	### Network ###

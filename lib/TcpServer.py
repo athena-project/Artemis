@@ -46,6 +46,7 @@ class TcpServer:
 		self.sock.setblocking(0)
 		self.sock.bind( (self.host, self.port) )
 		self.sock.listen( 5 )	
+		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		
 		
 	

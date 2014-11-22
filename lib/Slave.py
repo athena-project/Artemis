@@ -160,20 +160,22 @@ class Crawler( Thread ):
 		self.newUrls			= newUrls
 		self.contentTypes		= contentTypes 
 		self.delay				= delay
-		self.manager 			= manager
 		self.redis 				= redis
 				
 		self.waitingRessources	= waitingRessources
 		self.Exit 				= Exit
 
 	def run(self):
+		url="" 
 		while not self.Exit.is_set():
 			with self.urlsLock:
-				if not self.urls :
-					time.sleep( 1 ) 
-				url = self.urls.popleft()
-			
-			self.dispatch( url )
+				if self.urls :
+					url = self.urls.popleft()
+			if not url:
+				time.sleep(1)
+			else:
+				self.dispatch( url )
+				url=""
 
 				
 	### Network handling ###
@@ -237,7 +239,6 @@ class Crawler( Thread ):
 		with self.urlsLock:
 			self.redis.add( url.url, t)
 
-		
 		rType						= contentTypeRules[ contentType ] 
 		ressource					= rTypes[ rType ][0]()
 		ressource.url				= url.url

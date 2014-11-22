@@ -40,7 +40,8 @@ master = Master.Master(
 	protocolRules	= configDict2boolDict( config['ProtocolRules'] ),
 	originRules		= configDict2boolDict( config['OriginRules'] ),
 	delay 			= int( config['Update']['delay'] ),
-	maxRamSize		= int( config['UrlHandling']['maxRamSize'] )
+	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
+	numOverseer	= int( config['General']['numOverseer'] )
 )
 for url in config['Gateway']:
 	master.urlCacheHandler.add( Url.Url(url="http://"+url) )

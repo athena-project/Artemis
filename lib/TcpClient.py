@@ -34,8 +34,8 @@ class TcpClient:
 		
 		
 	def __del__(self):
-		self.sock.close()
-
+		pass
+		
 	def getUrls(self, msg):
 		pass
 	
