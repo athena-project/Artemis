@@ -1,12 +1,5 @@
 ﻿#! /bin/sh
 
-if [ whoami!="root" ]
-then 
-	echo "Operation not permitted"
-	return 0
-fi
-
-
 ARTEMIS_BIN="/usr/opt/artemis"
 ARTEMIS_CONF="/etc/artemis"
 
@@ -16,6 +9,8 @@ ARTEMIS_CONF="/etc/artemis"
 ###
 
 # General
+apt-get update
+apt-get upgrade
 apt-get install python3-dev python3-pip
 
 ##Redis
