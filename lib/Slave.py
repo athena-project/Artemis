@@ -120,7 +120,7 @@ class CrawlerOverseer( Thread ):
 		minUrls = 2 * self.maxCrawlers
 		t = TcpClient( self.masterAddress, self.cPort )
 		
-		
+		print( "hello under way")
 		while not self.Exit.is_set():
 			if len(self.urls) < minUrls:		
 				t.send( TcpMsg.T_PENDING )
@@ -505,4 +505,5 @@ class Slave( TcpServer ):
 			self.addUrls( data )
 	
 	def addUrls(self, data ):
+		print( data )
 		self.urls.extend( Url.unserializeList( data ) )	

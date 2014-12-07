@@ -33,7 +33,7 @@ def configDict2boolDict(cDict):
 
 
 config = configparser.ConfigParser()
-config.read('../conf/master.ini')
+config.read('/etc/artemis/master.ini')
 
 master = Master.Master(
 	useragent		= config['General']['useragent'], 

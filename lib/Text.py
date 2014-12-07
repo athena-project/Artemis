@@ -193,6 +193,7 @@ class TextHandler:
 		self.cHandler	= libpyRessource.RessourceHandler( self.p_cManager )
 	
 	def save(self, text):
+		pass
 		#f = open("reb/index", "a")
 		#f.write(str(text.id)+" "+text.url+"\n")
 		#f.close()
@@ -200,12 +201,12 @@ class TextHandler:
 		#f2 = open("reb/pages/"+str(text.id), "w") 
 		#f2.write(text.data)
 		#f2.close()
-		cRessource	= libpyRessource.Ressource()
-		cRessource.setId( text.id )
-		cRessource.setCurrentRevision( text.revision )
-		cRessource.setChunkIdsFromList( text.chunks )
+		#cRessource	= libpyRessource.Ressource()
+		#cRessource.setId( text.id )
+		#cRessource.setCurrentRevision( text.revision )
+		#cRessource.setChunkIdsFromList( text.chunks )
 
-		self.cHandler.newRevision(cRessource, text.data)
-		text.chunks = cRessource.getChunkIdsList()
+		#self.cHandler.newRevision(cRessource, text.data)
+		#text.chunks = cRessource.getChunkIdsList()
 
-		RessourceHandler.save(self,text)
+		#RessourceHandler.save(self,text)

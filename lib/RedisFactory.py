@@ -1,4 +1,4 @@
 import redis
 
 def getConn():
-	return redis.StrictRedis(host='localhost', port=6379, db=0)
+	return redis.StrictRedis(host='92.222.70.24', port=6379, db=0)

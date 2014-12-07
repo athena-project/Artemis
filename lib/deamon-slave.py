@@ -33,7 +33,7 @@ def configDict2boolDict(cDict):
 
 
 config = configparser.ConfigParser()
-config.read('../conf/slave.ini')
+config.read('/etc/artemis/slave.ini')
 
 s=Slave.Slave(
 	masterAddress	= config['General']['masterAddress'],

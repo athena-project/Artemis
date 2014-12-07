@@ -225,6 +225,7 @@ class Master( TcpServer ):
 			@bried 			- serialize the data before adding the extracted files in cache
 			@param	data	- 
 		"""
+		print( data )
 		urls = Url.unserializeList( data[1:] )
 		for url in urls :
 			if self.firstValidUrl( url ):
