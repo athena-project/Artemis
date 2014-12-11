@@ -13,7 +13,7 @@ ARTEMIS_CONF="/etc/artemis"
 apt-get update
 apt-get upgrade
 #apt-get install build-essential cmake
-apt-get install -y python3-dev python3-pip
+apt-get install -y python3-dev python3-pip mysql-client-core-5.5
 
 ##Redis
 #wget http://download.redis.io/redis-stable.tar.gz
