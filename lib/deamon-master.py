@@ -37,8 +37,6 @@ config.read('/etc/artemis/master.ini')
 
 master = Master.Master(
 	useragent		= config['General']['useragent'], 
-	cPort			= int( config['General']['cPort'] ), 
-	port			= int( config['General']['sPort'] ), 
 	period			= int( config['General']['period'] ), 
 	domainRules		= configDict2boolDict( config['DomainRules'] ),
 	protocolRules	= configDict2boolDict( config['ProtocolRules'] ),

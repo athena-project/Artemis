@@ -18,8 +18,7 @@
 
 import time
 from urllib.parse import urlparse
-from TcpServer import TcpServer
-from TcpClient import TcpClient
+
 from TcpMsg    import TcpMsg
 import UrlCacheHandler
 import Url
@@ -27,13 +26,14 @@ import RobotCacheHandler
 from threading import Thread, RLock, Event
 from collections import deque
 import logging
-
+import AMQPConsumer
+import AMQPProducer
 
 class Overseer( Thread ):
 	ACTION_CRAWL	= 0
 	ACTION_UPDATE	= 1
 	
-	def __init__(self, action, cPort, slavesAvailable, urlCacheHandler, period, delay, lock, Exit ):
+	def __init__(self, action, urlCacheHandler, period, delay, lock, Exit ):
 		"""
 			@param	action			- CRAWL or UPDATE( will crawl again urls already visited )
 			@param	cPort			- port used by the TcpClient to send a piece of work
@@ -45,12 +45,9 @@ class Overseer( Thread ):
 			@param	Exit 			- stop condition( an event share with Master, when Master die it is set to true )
 		"""
 		Thread.__init__(self)
+		self.producer			= AMQPProducer.AMQPProducer("urls_tasks")
 		
-		
-		self.action				= action 
-		self.slavesAvailable	= slavesAvailable
-		self.cPort				= cPort
-	
+		self.action				= action 	
 		self.urlCacheHandler	= urlCacheHandler
 		
 		self.period				= period			
@@ -66,23 +63,17 @@ class Overseer( Thread ):
 			@brief	The core function, it will dispatch work to the slaves
 		"""
 		while not self.Exit.is_set():
-			try:
-				slaveAdress = self.slavesAvailable.popleft()
-				t = TcpClient( slaveAdress, self.cPort )
-				with self.lock:
-					bundle	= Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
+			with self.lock:
+				bundle = Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
 												self.delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
-
-				t.send( TcpMsg.T_URL_TRANSFER + bundle)
-			except Exception :
+			if bundle: 
+				self.producer.add_task( bundle)
+			else:
 				time.sleep( self.period )
 	
 	def secondValidUrl(url, cacheHandler, redis, delay):
 		"""
 			@param url				-	
-			@param cacheHandler		- url cacheHandler
-			@param redis			- a redis handler
-			@param delay 			- delay between two update for an url
 			@brief	a second validation, because during url storage, the current url may have been visited by a slave
 		"""	
 		if( url == None):
@@ -107,18 +98,16 @@ class Overseer( Thread ):
 			self.update()
 		
 
-class Master( TcpServer ):
+class Master(AMQPConsumer.AMQPConsumer):
 	"""
 	"""
 	
 	Exit				= Event()
-	def __init__(self, useragent="*", cPort=1646 , port=1645, period=10, domainRules={"*":False},
+	def __init__(self, useragent="*", period=10, domainRules={"*":False},
 				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
 				maxRamSize=100, numOverseer=1) :
 		"""
 			@param useragent		- 
-			@param cPort			- port used by the TcpClient to send a piece of work
-			@param port				- port used by the TcpServer 
 			@param period			- period between to wake up
 			@param domainRules		- { "domain1" : bool (true ie allowed False forbiden) }, "*" is the default rule
 			@param protocolRules	- { "protocol1" : bool (true ie allowed False forbiden) }, "*" is the default protocol
@@ -128,15 +117,12 @@ class Master( TcpServer ):
 			@param maxRamSize		- maxsize of the urls list kept in ram( in Bytes )
 			@param numOverseer		- 
 		"""
-		self.cPort				= cPort #client port
-		TcpServer.__init__(self, port)				 #server port
+		AMQPConsumer.AMQPConsumer.__init__(self, "new_urls", False)				
 		
 		self.useragent 			= useragent
 		self.period				= period # delay(second) betwen two crawl
 		
 		#logger.debug("Hello")
-
-		self.slavesAvailable	= deque() #address1,..
 		
 		self.domainRules		= domainRules
 		self.protocolRules		= protocolRules
@@ -150,36 +136,28 @@ class Master( TcpServer ):
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 		
 		self.numOverseer		= numOverseer
-		self.initNetworking()
 		self.lock				= RLock()
 		self.Exit				= Event()
-		
+		self.i=0
 	def __del__(self):
 		self.Exit.set()
 		
 	def crawl(self):
 		for i in range(0, self.numOverseer):
-			master = Overseer( action = Overseer.ACTION_CRAWL, cPort = self.cPort,
-								slavesAvailable = self.slavesAvailable, urlCacheHandler = self.urlCacheHandler,
+			master = Overseer( action = Overseer.ACTION_CRAWL, urlCacheHandler = self.urlCacheHandler,
 								period = self.period,
 								delay = self.delay, lock=self.lock, Exit=self.Exit)
 			master.start()
-		self.listen()
+		self.consume()
 		
 	### Network ###
-	def process(self, type, data, address):
-		if type == TcpMsg.T_DONE:
-			pass
-			
-		if type == TcpMsg.T_PENDING:
-			self.slavesAvailable.append( address[0] )
-			
-		if type == TcpMsg.T_URL_TRANSFER:
-			self.addUrls( data )
+	def proccess(self, msg):
+		self.addUrls( msg.body)
 	
 	
 	### Url Handling ###
 	def firstValidUrl(self, url):
+		self.i+=1
 		"""
 			@brief			- it will chek 
 				if the url match the domainRules, the protocolRules, the originRules,
@@ -217,7 +195,8 @@ class Master( TcpServer ):
 		robot = self.robotCacheHandler.get( urlP.scheme+"://"+urlP.netloc )
 		if robot != None and not robot.can_fetch(self.useragent , url.url):
 			return False
-		
+		print(self.i)
+
 		return True
 		
 	def addUrls(self, data ):
@@ -225,7 +204,7 @@ class Master( TcpServer ):
 			@bried 			- serialize the data before adding the extracted files in cache
 			@param	data	- 
 		"""
-		print( data )
+		#print( data )
 		urls = Url.unserializeList( data[1:] )
 		for url in urls :
 			if self.firstValidUrl( url ):

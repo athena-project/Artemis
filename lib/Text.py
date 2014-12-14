@@ -22,7 +22,7 @@ import SQLFactory
 import hashlib
 import time
 
-import libpyRessource
+#import libpyRessource
 
 
 class TextManager( RessourceManager):
@@ -189,8 +189,8 @@ class Text( Ressource ):
 class TextHandler:
 	def __init__(self):
 		RessourceHandler.__init__(self)
-		self.p_cManager	= libpyRessource.ChunkManager.create()
-		self.cHandler	= libpyRessource.RessourceHandler( self.p_cManager )
+		#self.p_cManager	= libpyRessource.ChunkManager.create()
+		#self.cHandler	= libpyRessource.RessourceHandler( self.p_cManager )
 	
 	def save(self, text):
 		pass

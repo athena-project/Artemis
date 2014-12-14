@@ -36,6 +36,11 @@ pip3 install  redis
 #config ?
 pip3 install  PyMySQL
 
+
+##RabbitMQ
+pip3 install amqp
+
+
 ###
 ### END DEPENDENCES
 ###

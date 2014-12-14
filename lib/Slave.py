@@ -32,20 +32,22 @@ from TcpClient import TcpClient
 from TcpMsg import TcpMsg 
 	
 from contentTypeRules import *
+import AMQPConsumer
+import AMQPProducer
+
+
 import logging
 
 class Sender( Thread ):
-	def __init__(self, masterAddress, cPort, newUrls, Exit):
+	def __init__(self, newUrls, Exit):
 		"""
-			@param masterAddress	- ip adress of the master server
-			@param cPort 			- port used by the TcpClient to send a block of newly collected urls
 			@param newUrls			- deque which contains the urls collected by the crawlers
 			@param Exit 			- stop condition( an event share with Slave, when Slave die it is set to true )
 			@brief Send the collected urls to the master
 		"""
 		Thread.__init__(self)
-		self.masterAddress	= masterAddress
-		self.cPort			= cPort
+		self.producer			= AMQPProducer.AMQPProducer("new_urls")
+		
 		self.newUrls		= newUrls
 		self.Exit			= Exit
 	
@@ -54,23 +56,18 @@ class Sender( Thread ):
 	
 	def run(self):
 		while not self.Exit.is_set():
-			t = TcpClient( self.masterAddress, self.cPort )
-
 			while self.newUrls :
-				bundle	= Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE ) 
-				t.send( TcpMsg.T_URL_TRANSFER + bundle)
-			
+				bundle = Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE )
+				self.producer.add_task( bundle)
 			
 			time.sleep(1)
 
 				
 class CrawlerOverseer( Thread ):
-	def __init__(self, masterAddress, useragent, cPort, maxCrawlers, period, urls, contentTypes, delay, 
+	def __init__(self, useragent, maxCrawlers, period, urls, contentTypes, delay, 
 		waitingRessources, newUrls, Exit):
 		"""
-			@param masterAddress		- ip adress of the master server
 			@param useragent			- 
-			@param cPort 				- port used by the TcpClient to send a block of newly collected urls
 			@param maxCrawlers			- maximun number of crawlers
 			@param period				- period between to wake up
 			@param urls					- deque which contains the urls received from the master
@@ -82,9 +79,7 @@ class CrawlerOverseer( Thread ):
 			@brief Creates and monitors the crawlers
 		"""
 		Thread.__init__(self)
-		self.masterAddress		= masterAddress
 		self.useragent			= useragent
-		self.cPort				= cPort
 			
 		self.period				= period
 		self.maxCrawlers 		= maxCrawlers
@@ -117,18 +112,9 @@ class CrawlerOverseer( Thread ):
 			i+=1
 		
 	def run(self):
-		minUrls = 2 * self.maxCrawlers
-		t = TcpClient( self.masterAddress, self.cPort )
-		
 		print( "hello under way")
 		while not self.Exit.is_set():
-			if len(self.urls) < minUrls:		
-				t.send( TcpMsg.T_PENDING )
-
 			while self.urls :
-				if len(self.urls) < minUrls:
-					t.send( TcpMsg.T_PENDING )
-
 				n = self.maxCrawlers-len(self.crawlers)
 				for i in range(0,n):
 					w = Crawler( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
@@ -317,46 +303,52 @@ class SQLHandler( Thread ):
 			j+=1
 		return (insertRessource, updateRessource)
 		
+	def process(self):
+		for rType in self.waitingRessources :
+			while( len( self.waitingRessources[rType] ) > self.number ):
+				(insertRessources, updateRessources) = self.preprocessing( rType )
+				insertRecords, updateRecords	= [], []
+				
+				for r in insertRessources:
+					insertRecords.append( r.getRecord() )
+				for r in updateRessources:
+					updateRecords.append( r.getRecord() )
+				
+				if insertRecords :
+					ids = self.managers[rType].insertList( insertRecords );
+					i	= 0
+					while i<len(ids):
+						insertRessources[i].id	= ids[i]
+						i+=1
+				
+				if updateRecords:
+					self.managers[rType].updateList( updateRecords );
+				
+				
+				for ressource in insertRessources:
+					if not ressource.saved:
+						self.ressources[rType].append( ressource );
+				
+				for ressource in updateRessources:
+					if not ressource.saved:
+						self.ressources[rType].append( ressource );
+		
+		for rType in self.postRessources :		
+			while( len( self.postRessources[rType] ) > self.number ):
+				i,records = 0,[]
+				while i<self.number :
+					records.append( (self.postRessources[rType].popleft()).getRecord() )
+					i+=1
+						
+				self.managers[rType].updateList( records );
+		
+		
 	def run(self):
 		while not self.Exit.is_set():
-			for rType in self.waitingRessources :
-				while( len( self.waitingRessources[rType] ) > self.number ):
-					(insertRessources, updateRessources) = self.preprocessing( rType )
-					insertRecords, updateRecords	= [], []
-					
-					for r in insertRessources:
-						insertRecords.append( r.getRecord() )
-					for r in updateRessources:
-						updateRecords.append( r.getRecord() )
-					
-					if insertRecords :
-						ids = self.managers[rType].insertList( insertRecords );
-						i	= 0
-						while i<len(ids):
-							insertRessources[i].id	= ids[i]
-							i+=1
-					
-					if updateRecords:
-						self.managers[rType].updateList( updateRecords );
-					
-					
-					for ressource in insertRessources:
-						if not ressource.saved:
-							self.ressources[rType].append( ressource );
-					
-					for ressource in updateRessources:
-						if not ressource.saved:
-							self.ressources[rType].append( ressource );
-			
-			for rType in self.postRessources :		
-				while( len( self.postRessources[rType] ) > self.number ):
-					i,records = 0,[]
-					while i<self.number :
-						records.append( (self.postRessources[rType].popleft()).getRecord() )
-						i+=1
-							
-					self.managers[rType].updateList( records );
-					
+			try:
+				self.process()
+			except Exception as e:
+				logging.error( e )	
 					
 			time.sleep( 1 );
 
@@ -426,14 +418,11 @@ class WorkerOverseer(Thread):
 
 			time.sleep( 1 )
 
-class Slave( TcpServer ):
-	def __init__(self, masterAddress="", useragent="*", cPort=1645 , port=1646, period=10, maxWorkers=2, contentTypes={"*":False},
+class Slave( AMQPConsumer.AMQPConsumer ):
+	def __init__(self, useragent="*", period=10, maxWorkers=2, contentTypes={"*":False},
 		delay=86400, maxCrawlers=1, sqlNumber=100) :
 		"""
-			@param masterAddress	- ip adress of the master server
 			@param useragent		- 
-			@param cPort 			- port used by the TcpClient to send a block of newly collected urls
-			@param port				- port used by the TcpServer 
 			@param period			- period between to wake up
 			@param maxWorkers		- maximun number of workers handled by an instance of WorkerOverseer
 			@param contentTypes		- dict of allowed content type (in fact allowed rType cf.contentTypeRules.py)
@@ -442,11 +431,8 @@ class Slave( TcpServer ):
 			@param sqlNumber		-
 			@brief
 		"""
-		TcpServer.__init__(self, port)	
-			
-		self.masterAddress	= masterAddress
+		AMQPConsumer.AMQPConsumer.__init__(self, "urls_tasks", False)						
 		self.useragent		= useragent
-		self.cPort			= cPort
 		self.period			= period
 		
 		self.maxCrawlers		= maxCrawlers
@@ -456,10 +442,6 @@ class Slave( TcpServer ):
 		self.sqlNumber			= sqlNumber
 		self.contentTypes		= contentTypes
 		
-		t = TcpClient( masterAddress, self.cPort )
-		t.send( TcpMsg.T_PENDING )
-		
-		self.initNetworking()
 		
 		self.Exit 				= Event()
 		
@@ -479,10 +461,10 @@ class Slave( TcpServer ):
 	
 	def harness(self):
 		
-		self.sender	= Sender( masterAddress = self.masterAddress, cPort = self.cPort, newUrls = self.newUrls, Exit =self.Exit)
+		self.sender	= Sender( newUrls = self.newUrls, Exit =self.Exit)
 		
-		self.crawlerOverseer = CrawlerOverseer(masterAddress = self.masterAddress, useragent = self.useragent,
-										cPort = self.cPort, maxCrawlers  = self.maxCrawlers, period = self.period, 
+		self.crawlerOverseer = CrawlerOverseer(useragent = self.useragent,
+										maxCrawlers  = self.maxCrawlers, period = self.period, 
 										urls = self.urls,  contentTypes=self.contentTypes, delay=self.delay,
 										waitingRessources = self.waitingRessources, newUrls = self.newUrls, Exit = self.Exit)
 		
@@ -495,15 +477,15 @@ class Slave( TcpServer ):
 		self.sender.start()
 		self.crawlerOverseer.start()
 		
-		self.listen()
+		self.consume()
 	
-	def process(self, type, data, address):
-		if type == TcpMsg.T_DONE:
-			pass
+	def proccess(self, msg):
+		
+		if (len(self.urls) > 100 * self.maxCrawlers):
+			print( msg)
+			return
 	
-		if type == TcpMsg.T_URL_TRANSFER:
-			self.addUrls( data )
+		self.addUrls( msg.body)
 	
 	def addUrls(self, data ):
-		print( data )
-		self.urls.extend( Url.unserializeList( data ) )	
+		self.urls.extend( Url.unserializeList( data ) )

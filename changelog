@@ -20,3 +20,6 @@
 	Multiple overseers in master added
 1.0.4
 	Install script available
+
+1.1.0
+	RabbitMQ instead of socket for broadcasting

@@ -18,10 +18,9 @@
 # coding: utf-8
 
 import configparser
-import logging
 import Slave
 
-
+import logging
 logging.basicConfig(filename="/var/log/artemis/error.log", format='%(asctime)s  %(levelname)s  %(message)s',
 	level=logging.INFO)
 
@@ -36,10 +35,7 @@ config = configparser.ConfigParser()
 config.read('/etc/artemis/slave.ini')
 
 s=Slave.Slave(
-	masterAddress	= config['General']['masterAddress'],
-	useragent		= config['General']['useragent'], 
-	cPort			= int( config['General']['cPort'] ), 
-	port			= int( config['General']['sPort'] ), 
+	useragent		= config['General']['useragent'],  
 	period			= int( config['General']['period'] ), 
 	maxWorkers		= int( config['Thread']['maxWorkers'] ),
 	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
