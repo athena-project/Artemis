@@ -9,7 +9,7 @@
 	Optimisation SQL check, and url request
 	Use of redis for some SQL task
 1.0.0-a 
-	New architecture pattern for Slave.py and Master.py
+	New architecture pattern for Slave and Master
 
 1.0.1
 	Bug fix : ressource post-saving sql added
@@ -25,3 +25,5 @@
 	RabbitMQ instead of socket for broadcasting
 1.1.1
 	Speed improvement
+1.2.0
+	New architecture pattern for Master

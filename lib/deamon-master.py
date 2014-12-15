@@ -36,6 +36,7 @@ config = configparser.ConfigParser()
 config.read('/etc/artemis/master.ini')
 
 master = Master.Master(
+	serverNumber	= int(config['General']['serverNumber']), 
 	useragent		= config['General']['useragent'], 
 	period			= int( config['General']['period'] ), 
 	domainRules		= configDict2boolDict( config['DomainRules'] ),
@@ -43,8 +44,6 @@ master = Master.Master(
 	originRules		= configDict2boolDict( config['OriginRules'] ),
 	delay 			= int( config['Update']['delay'] ),
 	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
-	numOverseer		= int( config['General']['numOverseer'] )
+	gateway			= config['Gateway']
 )
-for url in config['Gateway']:
-	master.urlCacheHandler.add( Url.Url(url="http://"+url) )
-master.crawl()
+

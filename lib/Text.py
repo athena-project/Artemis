@@ -33,7 +33,6 @@ class TextManager( RessourceManager):
 		RessourceManager.__init__(self, con)
 		self.table		= "text"
 	
-	
 	def get(self, number, offset=0):
 		cur = self.con.cursor()
 		cur.execute("SELECT * FROM "+self.table+" ORDER BY id LIMIT "+number+" OFFSET "+offset)
@@ -45,7 +44,6 @@ class TextManager( RessourceManager):
 		cur.close()
 		
 		return records
-	
 	
 	def getByUrl(self, url):
 		cur = self.con.cursor()

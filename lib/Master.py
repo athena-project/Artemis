@@ -23,6 +23,8 @@ import UrlCacheHandler
 import Url
 import RobotCacheHandler
 from threading import Thread, RLock, Event
+from multiprocessing import Process, Queue
+
 from collections import deque
 import logging
 import AMQPConsumer
@@ -45,7 +47,7 @@ class Overseer( Thread ):
 		"""
 		Thread.__init__(self)
 		self.producer			= AMQPProducer.AMQPProducer("urls_tasks")
-		
+		print("overseer")
 		self.action				= action 	
 		self.urlCacheHandler	= urlCacheHandler
 		
@@ -65,6 +67,7 @@ class Overseer( Thread ):
 			with self.lock:
 				bundle = Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
 												self.delay, self.BUNDLE_SIZE)
+			print(bundle)
 			if bundle: 
 				self.producer.add_task( bundle)
 			else:
@@ -96,14 +99,14 @@ class Overseer( Thread ):
 		if self.action == Overseer.ACTION_UPDATE:
 			self.update()		
 
-class Master(AMQPConsumer.AMQPConsumer):
+class Server(Process, AMQPConsumer.AMQPConsumer):
 	"""
 	"""
 	
 	Exit				= Event()
 	def __init__(self, useragent="*", period=10, domainRules={"*":False},
 				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
-				maxRamSize=100, numOverseer=1) :
+				maxRamSize=100) :
 		"""
 			@param useragent		- 
 			@param period			- period between to wake up
@@ -115,8 +118,9 @@ class Master(AMQPConsumer.AMQPConsumer):
 			@param maxRamSize		- maxsize of the urls list kept in ram( in Bytes )
 			@param numOverseer		- 
 		"""
+		Process.__init__(self)
 		AMQPConsumer.AMQPConsumer.__init__(self, "new_urls", False)				
-		
+
 		self.useragent 			= useragent
 		self.period				= period # delay(second) betwen two crawl
 		
@@ -131,29 +135,25 @@ class Master(AMQPConsumer.AMQPConsumer):
 		self.urlCacheHandler	= UrlCacheHandler.UrlCacheHandler(self.maxRamSize)
 		self.robotCacheHandler	= RobotCacheHandler.RobotCacheHandler()		
 		
-		self.numOverseer		= numOverseer
 		self.lock				= RLock()
 		self.Exit				= Event()
 		self.i=0
 		self.j=0
+		
 	def __del__(self):
 		self.Exit.set()
 		
-	def crawl(self):
-		for i in range(0, self.numOverseer):
-			master = Overseer( action = Overseer.ACTION_CRAWL, urlCacheHandler = self.urlCacheHandler,								
-								period = self.period,
-								delay = self.delay, lock=self.lock, Exit=self.Exit)
-			master.start()
+	def run(self):
+		overseer = Overseer( action = Overseer.ACTION_CRAWL, urlCacheHandler = self.urlCacheHandler,								
+							period = self.period, delay = self.delay, lock=self.lock, Exit=self.Exit)
+		overseer.start()
+		print("starting	 ")
 		self.consume()
 		
-	### Network ###
 	def proccess(self, msg):
 		self.addUrls( msg.body)
 		print(self.i, "   ", self.j, "   ",self.urlCacheHandler.currentRamSize)
 	
-	
-	### Url Handling ###
 	def firstValidUrl(self, url):
 		self.i+=1
 		"""
@@ -203,7 +203,33 @@ class Master(AMQPConsumer.AMQPConsumer):
 			@param	data	- 
 		"""
 		#print( data )
-		urls = Url.unserializeList( data[1:] )
+		urls = Url.unserializeList( data )
 		for url in urls :
 			if self.firstValidUrl( url ):
 				self.urlCacheHandler.add( url ) 
+
+
+
+class Master:
+	def __init__(self, serverNumber=1, useragent="*", period=10, domainRules={"*":False},
+				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
+				maxRamSize=100, gateway=[]):
+		
+		self.pool	= []
+		
+		for i in range(0, serverNumber):
+			s = Server(useragent, period, domainRules, protocolRules, originRules, delay, maxRamSize)
+			self.pool.append( s )
+			
+		for url in gateway:
+				self.pool[0].urlCacheHandler.add( Url.Url(url="http://"+url) ) 
+		logging.info("Servers started")
+		
+		
+		for i in range(0, serverNumber):
+			self.pool[i].start()
+		self.pool[0].join()
+	
+	def __del__(self):
+		for i in range(0, serverNumber):
+			self.pool[i].terminate()

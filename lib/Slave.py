@@ -395,11 +395,10 @@ class WorkerOverseer(Thread):
 		self.done_queue 		= Queue()
 
 	def __del__(self):
-		i=0 
-		while i<self.maxWorkers:
+		for i in range(0, self.maxWorkers) :
 			self.task_queue.put( ('STOP',None) )
 			
-		print( "WorkerOverseer end")
+		logging.info( "WorkerOverseer end")
 		
 	def run(self):
 		i=0
