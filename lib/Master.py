@@ -19,7 +19,6 @@
 import time
 from urllib.parse import urlparse
 
-from TcpMsg    import TcpMsg
 import UrlCacheHandler
 import Url
 import RobotCacheHandler
@@ -32,11 +31,11 @@ import AMQPProducer
 class Overseer( Thread ):
 	ACTION_CRAWL	= 0
 	ACTION_UPDATE	= 1
-	
+	BUNDLE_SIZE		= 20
+
 	def __init__(self, action, urlCacheHandler, period, delay, lock, Exit ):
 		"""
 			@param	action			- CRAWL or UPDATE( will crawl again urls already visited )
-			@param	cPort			- port used by the TcpClient to send a piece of work
 			@param	slavesAvailable - ips of the slaves waiting to working 
 			@param	urlCacheHandler - 
 			@param	period 			- period between to wake up
@@ -65,7 +64,7 @@ class Overseer( Thread ):
 		while not self.Exit.is_set():
 			with self.lock:
 				bundle = Url.makeCacheBundle(self.urlCacheHandler, Overseer.secondValidUrl, self.redis,
-												self.delay, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE)
+												self.delay, self.BUNDLE_SIZE)
 			if bundle: 
 				self.producer.add_task( bundle)
 			else:
@@ -95,8 +94,7 @@ class Overseer( Thread ):
 		if self.action == Overseer.ACTION_CRAWL:
 			self.crawl()
 		if self.action == Overseer.ACTION_UPDATE:
-			self.update()
-		
+			self.update()		
 
 class Master(AMQPConsumer.AMQPConsumer):
 	"""
@@ -122,8 +120,6 @@ class Master(AMQPConsumer.AMQPConsumer):
 		self.useragent 			= useragent
 		self.period				= period # delay(second) betwen two crawl
 		
-		#logger.debug("Hello")
-		
 		self.domainRules		= domainRules
 		self.protocolRules		= protocolRules
 		self.originRules		= originRules
@@ -139,12 +135,13 @@ class Master(AMQPConsumer.AMQPConsumer):
 		self.lock				= RLock()
 		self.Exit				= Event()
 		self.i=0
+		self.j=0
 	def __del__(self):
 		self.Exit.set()
 		
 	def crawl(self):
 		for i in range(0, self.numOverseer):
-			master = Overseer( action = Overseer.ACTION_CRAWL, urlCacheHandler = self.urlCacheHandler,
+			master = Overseer( action = Overseer.ACTION_CRAWL, urlCacheHandler = self.urlCacheHandler,								
 								period = self.period,
 								delay = self.delay, lock=self.lock, Exit=self.Exit)
 			master.start()
@@ -153,6 +150,7 @@ class Master(AMQPConsumer.AMQPConsumer):
 	### Network ###
 	def proccess(self, msg):
 		self.addUrls( msg.body)
+		print(self.i, "   ", self.j, "   ",self.urlCacheHandler.currentRamSize)
 	
 	
 	### Url Handling ###
@@ -195,7 +193,7 @@ class Master(AMQPConsumer.AMQPConsumer):
 		robot = self.robotCacheHandler.get( urlP.scheme+"://"+urlP.netloc )
 		if robot != None and not robot.can_fetch(self.useragent , url.url):
 			return False
-		print(self.i)
+		self.j+=1
 
 		return True
 		

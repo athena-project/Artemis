@@ -75,12 +75,12 @@ mkdir /var/log/artemis
 ###
 ###	BEGIN FIREWALL
 ###
-cp $CURRENT_DIR/firewall.sh /etc/init.d/firewall.sh
+#cp $CURRENT_DIR/firewall.sh /etc/init.d/firewall.sh
 		
-chmod +x /etc/init.d/firewall.sh
-/etc/init.d/firewall.sh
+#chmod +x /etc/init.d/firewall.sh
+#/etc/init.d/firewall.sh
 		
-update-rc.d firewall.sh defaults
+#update-rc.d firewall.sh defaults
 ###
 ###	END FIREWALL
 ###

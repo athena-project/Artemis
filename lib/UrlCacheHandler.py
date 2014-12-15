@@ -30,7 +30,7 @@ class UrlCacheHandler:
 		self.data = {}
 	
 	def empty(self):
-		return (self.currentRamSize==0)
+		return not self.data
 		
 	def exists(self, elmt):
 		return (elmt.url in self.data)
@@ -45,7 +45,7 @@ class UrlCacheHandler:
 		"""
 			@return elmt or None if no elmt in cache
 		"""
-		if self.currentRamSize == 0 :
+		if not self.data :
 			return None
 		
 		elmt = self.data.popitem()[1]

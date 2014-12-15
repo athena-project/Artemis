@@ -41,7 +41,8 @@ s=Slave.Slave(
 	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
 	delay			= int( config['Update']['delay'] ),
 	maxCrawlers		= int( config['Thread']['maxCrawlers'] ),
-	sqlNumber		= int( config['SQL']['number'] )
+	sqlNumber		= int( config['SQL']['number'] ),
+	maxNewUrls		= int( config['General']['maxNewUrls'] )
 )
 
 s.harness()

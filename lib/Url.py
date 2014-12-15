@@ -123,47 +123,41 @@ def unserializeList(s):
 	return l
 
 
-def makeBundle(urls, maxSize):
+def makeBundle(urls, maxlen):
 	"""
 		@param urls				- a deque of urls
-		@param maxSize			- in bytes
+		@param maxlen			- the bundle is bounded to the specified maximum length
 		@brief Prepare a bundle of urls to sending 
 	"""
-	i, bundle = 0, ""
+	bundle = ""
 	 
-	while i<maxSize and urls :
-		url = urls.popleft()
-		url.serialize()
-		if url.serializeSize() + i >= maxSize:
-			i=maxSize
-			urls.append(url)
-		else :	
-			i		+=url.serializeSize()+1
-			url		= Url.serialize( url )+"~" 
+	try:
+		for i in range(0, maxlen):
+			url 	= urls.popleft()
+			url		= url.serialize()+"~" 
 			bundle	+=url
+	except Exception:
+		pass
+		
 	return bundle
 
-def makeCacheBundle(cacheHandler, fValid, redis, delay, maxSize):
+def makeCacheBundle(cacheHandler, fValid, redis, delay, maxlen):
 	"""
 		@param cacheHandler		- see UrlCacheHandler.py
 		@param redis			- a redis handler
 		@param delay 			- delay between two update for an url
-		@param maxSize			- in bytes
+		@param maxSize			- the bundle is bounded to the specified maximum length
 		@brief Prepare a bundle of urls to sending, from urlCacheHandler
 	"""
 	bundle = ""
-	urlsSize = cacheHandler.currentRamSize
-	i,n = 0,0
+	i = 0
 	
-	while i<urlsSize and i<maxSize and not cacheHandler.empty():
+	while i<maxlen and not cacheHandler.empty():
 		url = cacheHandler.get()
 		if not fValid( url, cacheHandler, redis, delay):
 			pass
-		elif url.serializeSize() + i > maxSize:
-			i=maxSize
-			cacheHandler.add(url)
 		else :	
-			i		+=url.serializeSize()+1
+			i		+= 1
 			url		= url.serialize()+"~" 
 			bundle	+=url
 	

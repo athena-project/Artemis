@@ -23,3 +23,5 @@
 
 1.1.0
 	RabbitMQ instead of socket for broadcasting
+1.1.1
+	Speed improvement

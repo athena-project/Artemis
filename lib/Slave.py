@@ -27,9 +27,6 @@ from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
 
 import Url
-from TcpServer import TcpServer
-from TcpClient import TcpClient
-from TcpMsg import TcpMsg 
 	
 from contentTypeRules import *
 import AMQPConsumer
@@ -39,6 +36,8 @@ import AMQPProducer
 import logging
 
 class Sender( Thread ):
+	BUNDLE_SIZE		= 50
+
 	def __init__(self, newUrls, Exit):
 		"""
 			@param newUrls			- deque which contains the urls collected by the crawlers
@@ -57,8 +56,8 @@ class Sender( Thread ):
 	def run(self):
 		while not self.Exit.is_set():
 			while self.newUrls :
-				bundle = Url.makeBundle( self.newUrls, TcpMsg.T_URL_TRANSFER_SIZE-TcpMsg.T_TYPE_SIZE )
-				self.producer.add_task( bundle)
+				bundle = Url.makeBundle( self.newUrls, self.BUNDLE_SIZE )
+				self.producer.add_task( bundle )
 			
 			time.sleep(1)
 
@@ -112,11 +111,11 @@ class CrawlerOverseer( Thread ):
 			i+=1
 		
 	def run(self):
-		print( "hello under way")
 		while not self.Exit.is_set():
 			while self.urls :
 				n = self.maxCrawlers-len(self.crawlers)
 				for i in range(0,n):
+
 					w = Crawler( urlsLock=self.urlsLock, urls=self.urls, newUrls=self.newUrls,
 										contentTypes=self.contentTypes, delay=self.delay, redis=self.redis,
 										waitingRessources=self.waitingRessources, Exit = self.Exit )
@@ -125,6 +124,8 @@ class CrawlerOverseer( Thread ):
 
 				time.sleep( self.period ) 
 				self.pruneCrawlers()
+			print("sleep")
+
 			time.sleep( self.period ) 
 
 class Crawler( Thread ):
@@ -159,8 +160,10 @@ class Crawler( Thread ):
 				if self.urls :
 					url = self.urls.popleft()
 			if not url:
+				print("sleep")
 				time.sleep(1)
 			else:
+				print("crawling")
 				self.dispatch( url )
 				url=""
 
@@ -235,10 +238,7 @@ class Crawler( Thread ):
 		
 		#Collected and adding new urls
 		urls = ressource.extractUrls( urlObj )
-		for url in urls :
-			tmpLast = self.redis.get( url.url )
-			if time.time() - tmpLast > self.delay:
-				self.newUrls.append( url )
+		self.newUrls.extend( urls )
 
 
 class SQLHandler( Thread ):							
@@ -370,9 +370,9 @@ def Worker(input, output):
 				if rType != 'STOP':
 					handlers[rType].save( ressource ) 
 					output.put( (rType,ressource) )
-			except Exception:
+			except Exception as e:
 				rType, ressource = "", None
-		
+				logging.debug(e)
 		time.sleep(1)
 	
 
@@ -420,7 +420,7 @@ class WorkerOverseer(Thread):
 
 class Slave( AMQPConsumer.AMQPConsumer ):
 	def __init__(self, useragent="*", period=10, maxWorkers=2, contentTypes={"*":False},
-		delay=86400, maxCrawlers=1, sqlNumber=100) :
+		delay=86400, maxCrawlers=1, sqlNumber=100, maxNewUrls=10000) :
 		"""
 			@param useragent		- 
 			@param period			- period between to wake up
@@ -447,7 +447,7 @@ class Slave( AMQPConsumer.AMQPConsumer ):
 		
 		
 		self.urls				= deque()
-		self.newUrls			= deque()
+		self.newUrls			= deque( maxlen = maxNewUrls )
 		
 		self.waitingRessources	= {}
 		self.ressources			= {}
@@ -476,15 +476,18 @@ class Slave( AMQPConsumer.AMQPConsumer ):
 		self.workerOverseer.start()
 		self.sender.start()
 		self.crawlerOverseer.start()
-		
 		self.consume()
 	
-	def proccess(self, msg):
-		
-		if (len(self.urls) > 100 * self.maxCrawlers):
-			print( msg)
-			return
 	
+	def consume(self):
+		self.channel.basic_consume(callback=self.proccess, queue=self.key)
+		maxUrls = 100 * self.maxCrawlers
+		while True:
+			while True and (len(self.urls) < maxUrls) :
+				self.channel.wait()
+			time.sleep(1)
+	
+	def proccess(self, msg):
 		self.addUrls( msg.body)
 	
 	def addUrls(self, data ):
