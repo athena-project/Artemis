@@ -22,7 +22,7 @@ import Slave
 
 import logging
 logging.basicConfig(filename="/var/log/artemis/error.log", format='%(asctime)s  %(levelname)s  %(message)s',
-	level=logging.INFO)
+	level=logging.DEBUG)
 
 def configDict2boolDict(cDict):
 	d={}
@@ -34,15 +34,18 @@ def configDict2boolDict(cDict):
 config = configparser.ConfigParser()
 config.read('/etc/artemis/slave.ini')
 
-s=Slave.Slave(
-	useragent		= config['General']['useragent'],  
-	period			= int( config['General']['period'] ), 
-	maxWorkers		= int( config['Thread']['maxWorkers'] ),
-	contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
-	delay			= int( config['Update']['delay'] ),
-	maxCrawlers		= int( config['Thread']['maxCrawlers'] ),
-	sqlNumber		= int( config['SQL']['number'] ),
-	maxNewUrls		= int( config['General']['maxNewUrls'] )
-)
+#s=Slave.Slave(
+	#useragent		= config['General']['useragent'],  
+	#period			= int( config['General']['period'] ), 
+	#maxWorkers		= int( config['Thread']['maxWorkers'] ),
+	#contentTypes	= configDict2boolDict( config['ContentTypes'] ), 
+	#delay			= int( config['Update']['delay'] ),
+	#maxCrawlers		= int( config['Thread']['maxCrawlers'] ),
+	#sqlNumber		= int( config['SQL']['number'] ),
+	#maxNewUrls		= int( config['General']['maxNewUrls'] )
+#)
 
-s.harness()
+#s.harness()
+
+
+

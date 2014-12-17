@@ -124,7 +124,6 @@ class CrawlerOverseer( Thread ):
 
 				time.sleep( self.period ) 
 				self.pruneCrawlers()
-			print("sleep")
 
 			time.sleep( self.period ) 
 
@@ -160,10 +159,8 @@ class Crawler( Thread ):
 				if self.urls :
 					url = self.urls.popleft()
 			if not url:
-				print("sleep")
 				time.sleep(1)
 			else:
-				print("crawling")
 				self.dispatch( url )
 				url=""
 
@@ -184,18 +181,24 @@ class Crawler( Thread ):
 			@param urlObj	- ParseResult (see urllib.parse), which represents the current url
 			@brief connects to  the remote ressource and get it
 		"""
+		t = time.time()
+		with self.urlsLock:
+			if time.time() - self.redis.get( url.url ) < self.delay:
+				return False
+			self.redis.add( url.url, t)
+		
 		try:
-			r = request.urlopen( url.url )	
-		except :
+			r = request.urlopen( url.url )
+		except Exception as e:
+			logging.debug(e)
 			return
-
+		#print( self.ident, "  ",time.time()-t)
 		#Statut check
 		if( r.status != 200 ):
 			return 
 			
 		#ContentType 
 		cT = r.getheader("Content-Type")	
-		t = time.time()
 		
 		#ContentType parsing
 		cTl=cT.split(";")
@@ -208,7 +211,7 @@ class Crawler( Thread ):
 				return 
 		elif (not self.contentTypes["*"]) or (contentType not in contentTypeRules):
 			return 
-		
+
 		data = r.read()
 		
 		#Hash
@@ -224,10 +227,6 @@ class Crawler( Thread ):
 			else:
 				charset = charset[0].strip()
 			data = str(data.decode(charset.lower()))
-
-		
-		with self.urlsLock:
-			self.redis.add( url.url, t)
 
 		rType						= contentTypeRules[ contentType ] 
 		ressource					= rTypes[ rType ][0]()
@@ -264,7 +263,7 @@ class SQLHandler( Thread ):
 		self.conn				= SQLFactory.getConn()
 		for rType in rTypes :
 			self.managers[rType] = rTypes[rType][2]( self.conn )
-		
+					
 	def __del__(self):
 		logging.info("SQLHandler stopped")
 		
@@ -274,24 +273,20 @@ class SQLHandler( Thread ):
 			@brief 
 		"""
 		wrs, urls, i=[], [], 0
-		insertRessource, updateRessource =[], []
+		ressources = []
 
-		while i<self.number:
+		for i in range(0, self.number):
 			wrs.append( self.waitingRessources[rType].popleft() )
 			urls.append( wrs[-1][1] )
-			i+=1
 		
 		records	= self.managers[rType].getByUrls(urls = urls)
 		
-		j = 0
-		while j<self.number:
+		for j in range(0, self.number):
 			ressource = rTypes[ rType ][0]()
 			if urls[j] in records :
 				ressource.hydrate( records[ urls[j] ] )
-				updateRessource.append( ressource )
-			else:
-				insertRessource.append( ressource )
-
+			ressources.append( ressource )
+			
 			ressource.url					= wrs[j][1]
 			ressource.domain				= wrs[j][2]
 			ressource.sizes.append(			len(wrs[j][3] ) ) 
@@ -300,45 +295,71 @@ class SQLHandler( Thread ):
 			ressource.sha512.append(	 	wrs[j][5]  )
 			ressource.lastUpdate			= wrs[j][4]
 			ressource.data					= wrs[j][3]
-			j+=1
-		return (insertRessource, updateRessource)
+			
+		return ressources
+		
+		
+	#def preprocessing(self, rType):
+		#"""
+			#@param rType	- see contentTypeRules.py
+			#@brief 
+		#"""
+		#wrs, urls, i=[], [], 0
+		#insertRessource, updateRessource =[], []
+
+		#while i<self.number:
+			#wrs.append( self.waitingRessources[rType].popleft() )
+			#urls.append( wrs[-1][1] )
+			#i+=1
+		
+		#records	= self.managers[rType].getByUrls(urls = urls)
+		
+		#j = 0
+		#while j<self.number:
+			#ressource = rTypes[ rType ][0]()
+			#if urls[j] in records :
+				#ressource.hydrate( records[ urls[j] ] )
+				#updateRessource.append( ressource )
+			#else:
+				#insertRessource.append( ressource )
+
+			#ressource.url					= wrs[j][1]
+			#ressource.domain				= wrs[j][2]
+			#ressource.sizes.append(			len(wrs[j][3] ) ) 
+			#ressource.contentTypes.append( 	wrs[j][0] ) 
+			#ressource.times.append( 		wrs[j][4] )
+			#ressource.sha512.append(	 	wrs[j][5]  )
+			#ressource.lastUpdate			= wrs[j][4]
+			#ressource.data					= wrs[j][3]
+			#j+=1
+		#return (insertRessource, updateRessource)
 		
 	def process(self):
 		for rType in self.waitingRessources :
 			while( len( self.waitingRessources[rType] ) > self.number ):
-				(insertRessources, updateRessources) = self.preprocessing( rType )
-				insertRecords, updateRecords	= [], []
+				ressources 	= self.preprocessing( rType )
+				records, urls		= [], []
 				
-				for r in insertRessources:
-					insertRecords.append( r.getRecord() )
-				for r in updateRessources:
-					updateRecords.append( r.getRecord() )
+				for r in ressources:
+					records.append( r.getRecord() )
+					urls.append( r.url ) 
 				
-				if insertRecords :
-					ids = self.managers[rType].insertList( insertRecords );
-					i	= 0
-					while i<len(ids):
-						insertRessources[i].id	= ids[i]
-						i+=1
+				self.managers[rType].updateList( records )
 				
-				if updateRecords:
-					self.managers[rType].updateList( updateRecords );
+				savedRecords = self.managers[rType].getByUrls( urls )
+				for ressource in ressources :
+					ressource.id = savedRecords[ ressource.url ].id
 				
-				
-				for ressource in insertRessources:
+				for ressource in ressources:
 					if not ressource.saved:
 						self.ressources[rType].append( ressource );
 				
-				for ressource in updateRessources:
-					if not ressource.saved:
-						self.ressources[rType].append( ressource );
 		
 		for rType in self.postRessources :		
 			while( len( self.postRessources[rType] ) > self.number ):
-				i,records = 0,[]
-				while i<self.number :
+				records = []
+				for i in range(0, self.number):
 					records.append( (self.postRessources[rType].popleft()).getRecord() )
-					i+=1
 						
 				self.managers[rType].updateList( records );
 		

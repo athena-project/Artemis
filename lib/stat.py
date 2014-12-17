@@ -76,6 +76,11 @@ def countUpdate(table):
 	cur.close()
 	return count
 
+def truncate(table):
+	cur = con.cursor()
+	cur.execute('TRUNCATE '+table )
+	cur.close()
+	
 print( 'speed          ', speed("html") )
 print( 'taille moyenne ', avgSize("html") )
 

@@ -27,3 +27,5 @@
 	Speed improvement
 1.2.0
 	New architecture pattern for Master
+1.2.1
+	Bug fix : SQLHandler in Slave

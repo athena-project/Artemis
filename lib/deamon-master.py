@@ -46,4 +46,4 @@ master = Master.Master(
 	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
 	gateway			= config['Gateway']
 )
-
+master.start()
