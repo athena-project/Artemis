@@ -11,7 +11,7 @@ class AMQPConsumer:
 		
 		if ack:
 			self.channel.basic_qos(0 , 10, False)
-		self.channel.queue_declare(self.key, durable=True)
+		self.channel.queue_declare(self.key, durable=False)
 	def __del__(self):
 		self.conn.close()
 	

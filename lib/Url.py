@@ -92,8 +92,9 @@ def serializeList(l):
 		
 def unserialize(s):
 	origin, url, type, charset, alt= "", "", "", "", ""
-	i,j,k,n=0,0,0, len(s)
-	while j<n:
+	i,k=0,0
+
+	for j in range(0, len(s)):
 		if s[j] == "|":
 			if k==0:
 				origin	= s[i:j]
@@ -106,20 +107,18 @@ def unserialize(s):
 			if k==4:
 				alt	=s[i:j]
 				
-			i,j,k=j+1,j+1,k+1
-		else:
-			j+=1
+			i,k=j+1,k+1
+			
 	return Url( url, origin, type, charset, alt)
 
 def unserializeList(s):
 	l = []
-	i,j,n=0,0,len(s)
-	while j<n:
+	i=0
+	for j in range(0, len(s)):
 		if s[j] == "~":
 			l.append( unserialize( s[i:j] ) )
-			i,j=j+1,j+1
-		else:
-			j+=1
+			i=j+1
+			
 	return l
 
 

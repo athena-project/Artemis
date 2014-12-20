@@ -298,42 +298,6 @@ class SQLHandler( Thread ):
 			
 		return ressources
 		
-		
-	#def preprocessing(self, rType):
-		#"""
-			#@param rType	- see contentTypeRules.py
-			#@brief 
-		#"""
-		#wrs, urls, i=[], [], 0
-		#insertRessource, updateRessource =[], []
-
-		#while i<self.number:
-			#wrs.append( self.waitingRessources[rType].popleft() )
-			#urls.append( wrs[-1][1] )
-			#i+=1
-		
-		#records	= self.managers[rType].getByUrls(urls = urls)
-		
-		#j = 0
-		#while j<self.number:
-			#ressource = rTypes[ rType ][0]()
-			#if urls[j] in records :
-				#ressource.hydrate( records[ urls[j] ] )
-				#updateRessource.append( ressource )
-			#else:
-				#insertRessource.append( ressource )
-
-			#ressource.url					= wrs[j][1]
-			#ressource.domain				= wrs[j][2]
-			#ressource.sizes.append(			len(wrs[j][3] ) ) 
-			#ressource.contentTypes.append( 	wrs[j][0] ) 
-			#ressource.times.append( 		wrs[j][4] )
-			#ressource.sha512.append(	 	wrs[j][5]  )
-			#ressource.lastUpdate			= wrs[j][4]
-			#ressource.data					= wrs[j][3]
-			#j+=1
-		#return (insertRessource, updateRessource)
-		
 	def process(self):
 		for rType in self.waitingRessources :
 			while( len( self.waitingRessources[rType] ) > self.number ):
@@ -422,10 +386,8 @@ class WorkerOverseer(Thread):
 		logging.info( "WorkerOverseer end")
 		
 	def run(self):
-		i=0
-		while i<self.maxWorkers:
+		for i in range(0, self.maxWorkers):
 			Process(target=Worker, args= (self.task_queue,self.done_queue) ).start()
-			i+=1
 			
 		while not self.Exit.is_set():
 			while not self.done_queue.empty():
@@ -438,7 +400,7 @@ class WorkerOverseer(Thread):
 
 			time.sleep( 1 )
 
-class Slave( AMQPConsumer.AMQPConsumer ):
+class Server(Process, AMQPConsumer.AMQPConsumer ):
 	def __init__(self, useragent="*", period=10, maxWorkers=2, contentTypes={"*":False},
 		delay=86400, maxCrawlers=1, sqlNumber=100, maxNewUrls=10000) :
 		"""
@@ -451,6 +413,7 @@ class Slave( AMQPConsumer.AMQPConsumer ):
 			@param sqlNumber		-
 			@brief
 		"""
+		Process.__init__(self)
 		AMQPConsumer.AMQPConsumer.__init__(self, "urls_tasks", False)						
 		self.useragent		= useragent
 		self.period			= period
@@ -479,6 +442,10 @@ class Slave( AMQPConsumer.AMQPConsumer ):
 	def __del__(self):
 		self.Exit.set()
 	
+	def terminate(self):
+		self.Exit.set()
+		Process.terminate(self)
+	
 	def harness(self):
 		
 		self.sender	= Sender( newUrls = self.newUrls, Exit =self.Exit)
@@ -498,17 +465,48 @@ class Slave( AMQPConsumer.AMQPConsumer ):
 		self.crawlerOverseer.start()
 		self.consume()
 	
+	def run(self):
+		self.harness()
 	
 	def consume(self):
-		self.channel.basic_consume(callback=self.proccess, queue=self.key)
-		maxUrls = 100 * self.maxCrawlers
-		while True:
-			while True and (len(self.urls) < maxUrls) :
-				self.channel.wait()
+		try:
+			self.channel.basic_consume(callback=self.proccess, queue=self.key)
+			maxUrls = 100 * self.maxCrawlers
+			while True:
+				while True and (len(self.urls) < maxUrls) :
+					self.channel.wait()
+				time.sleep(1)
+		except Exception as e:
+			logging.error( e )
 			time.sleep(1)
-	
+			#self.consume()
 	def proccess(self, msg):
 		self.addUrls( msg.body)
 	
 	def addUrls(self, data ):
 		self.urls.extend( Url.unserializeList( data ) )
+
+
+class Slave:
+	def __init__(self, serverNumber=1, useragent="*", period=10, maxWorkers=2, contentTypes={"*":False},
+		delay=86400, maxCrawlers=1, sqlNumber=100, maxNewUrls=10000) :
+			
+		self.pool			= []
+		self.serverNumber 	= serverNumber
+		
+		for i in range(0, self.serverNumber):
+			s = Server(useragent, period, maxWorkers, contentTypes, delay, maxCrawlers, sqlNumber, maxNewUrls)
+			self.pool.append( s )
+			
+		logging.info("Servers started")
+	
+	def __del__(self):
+		for server in self.pool:
+			server.terminate() if server.is_alive() else () 
+		logging.info("Servers stoped")
+
+	
+	def harness(self):
+		for server in self.pool:
+			server.start()
+		self.pool[0].join()

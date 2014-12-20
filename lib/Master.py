@@ -207,7 +207,7 @@ class Server(Process, AMQPConsumer.AMQPConsumer):
 
 
 
-class Master:
+class Master():
 	def __init__(self, serverNumber=1, useragent="*", period=10, domainRules={"*":False},
 				protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
 				maxRamSize=100, gateway=[]):
@@ -224,10 +224,11 @@ class Master:
 		logging.info("Servers started")
 	
 	def __del__(self):
-		for i in range(0, self.serverNumber):
-			self.pool[i].terminate()
+		for server in self.pool:
+			server.terminate() if server.is_alive() else () 
+		logging.info("Servers stoped")
 	
-	def start(self):
-		for i in range(0, self.serverNumber):
-			self.pool[i].start()
+	def harness(self):
+		for server in self.pool:
+			server.start()
 		self.pool[0].join()

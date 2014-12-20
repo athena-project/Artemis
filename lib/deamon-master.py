@@ -22,7 +22,8 @@ import logging
 import Url
 import Master 
 
-logging.basicConfig(filename="/var/log/artemis/error.log", format='%(asctime)s  %(levelname)s  %(message)s',
+logging.basicConfig(filename="/var/log/artemis/error.log", 
+	format='%(asctime)s  %(levelname)s  %(filename)s %(funcName)s %(message)s',
 	level=logging.INFO)
 
 def configDict2boolDict(cDict):
@@ -46,4 +47,4 @@ master = Master.Master(
 	maxRamSize		= int( config['UrlHandling']['maxRamSize'] ),
 	gateway			= config['Gateway']
 )
-master.start()
+master.harness()

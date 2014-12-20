@@ -8,7 +8,7 @@ class AMQPProducer:
 		self.key	= key
 		self.channel=channel = self.conn.channel()
 		
-		self.channel.queue_declare(self.key, durable=True)
+		self.channel.queue_declare(self.key, durable=False)
 		
 	def __del__(self):
 		self.conn.close()
