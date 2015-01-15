@@ -28,7 +28,7 @@ apt-get install -y python3-dev python3-pip mysql-client-core-5.5
 
 #config ?
 pip3 install  redis
-
+pip3 install python-redis-lock 2.0.0
 ##MySQL
 #apt-get install mysql-server
 #mysql -u root -p"rj7@kAv;8d7_e(E6:m4-w&" -e "CREATE DATABASE artemis"
@@ -58,6 +58,8 @@ ln -s /usr/opt/mnemosyne/libpyRessource.so   /usr/opt/artemis/libpyRessource.so 
 
 cp $CURRENT_DIR/../conf/* $ARTEMIS_CONF
 cp $CURRENT_DIR/../lib/*  $ARTEMIS_BIN
+chmod 0711 $ARTEMIS_CONF
+chmod 0711 $ARTEMIS_BIN
 
 cp $CURRENT_DIR/init/* /etc/init.d/
 chmod 0755 /etc/init.d/artemis-master

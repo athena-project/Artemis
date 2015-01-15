@@ -32,6 +32,7 @@ from contentTypeRules import *
 import AMQPConsumer
 import AMQPProducer
 
+import redis_lock
 
 import logging
 
@@ -183,9 +184,16 @@ class Crawler( Thread ):
 		"""
 		t = time.time()
 		with self.urlsLock:
-			if time.time() - self.redis.get( url.url ) < self.delay:
+			if t - self.redis.get( url.url ) < self.delay:
 				return False
+			
+			lock = redis_lock.Lock(self.redis, url.url)
+			
+			if not lock.acquire(blocking=False) :
+				return False
+			
 			self.redis.add( url.url, t)
+			lock.reset()
 		
 		try:
 			r = request.urlopen( url.url )

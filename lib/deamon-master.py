@@ -23,7 +23,7 @@ import Url
 import Master 
 
 logging.basicConfig(filename="/var/log/artemis/error.log", 
-	format='%(asctime)s  %(levelname)s  %(filename)s %(funcName)s %(message)s',
+	format='%(asctime)s  %(levelname)s  %(filename)s %(funcName)s %(lineno)d %(message)s',
 	level=logging.INFO)
 
 def configDict2boolDict(cDict):

@@ -22,7 +22,7 @@ import Slave
 
 import logging
 logging.basicConfig(filename="/var/log/artemis/error.log", 
-	format='%(asctime)s  %(levelname)s  %(filename)s %(funcName)s %(message)s',
+	format='%(asctime)s  %(levelname)s  %(filename)s %(funcName)s %(lineno)d %(message)s',
 	level=logging.DEBUG)
 
 def configDict2boolDict(cDict):
