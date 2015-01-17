@@ -187,7 +187,7 @@ class Crawler( Thread ):
 			if t - self.redis.get( url.url ) < self.delay:
 				return False
 			
-			lock = redis_lock.Lock(self.redis, url.url)
+			lock = redis_lock.Lock(self.redis, "lock_"+url.url)
 			
 			if not lock.acquire(blocking=False) :
 				return False
@@ -200,7 +200,7 @@ class Crawler( Thread ):
 		except Exception as e:
 			logging.debug(e)
 			return
-		#print( self.ident, "  ",time.time()-t)
+
 		#Statut check
 		if( r.status != 200 ):
 			return 
