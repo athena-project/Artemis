@@ -1,108 +1,86 @@
 import sys
 import collections
 import os
-from AMQPConsumer import *
-from AMQPProducer import *
-from AVL import *
+from .AMQPConsumer import *
+from .AMQPProducer import *
+from .Netarea import *
 
 
-import Mtype
+from .Mtype import *
 
-import RobotCacheHandler
+from .RobotCacheHandler import *
 from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
+
+from .Utility import serialize, unserialize
 
 #os.setpriority
 #os.cpu_count()
 #os.getloadavg()
 
-
-
-
-
 URL_BUNDLE_LEN = 10 #url
 
-
-###
-### For now we assume that the netarea are staticaly build, after we must adapt the area 
-###
-#class NetareaReport:
-	#def __init__(self, netarea, max_ram=0, used_ram=0):
-		#self.netarea = netarea
-	
-	#def weight(self):
-		#return (self.max_ram-self.used_ram) / self.max_ram
-	
-	#def serialize(self):
-		#return pickle.dumps( l )
-
-
-#class Health_Monitor(AMQPProducer, Thread):
-	#def __init__(self, Exit) :
-		#Thread.__init__(self)
-		
-		#AMQPConsumer.__init__(self, "artemis_health")
-		#self.channel.exchange_declare(exchange='artemis_health_direct', type='direct')
-		##self.channel.queue_declare(self.key, durable=True) already in parent 
-		#self.channel.queue_bind(queue='artemis_health', exchange='artemis_health_direct', routing_key="master")
-		
-		
-		#self.netareaMap			= {} # unique id, 
-		#self.netareaTree		= NetareaNode()
-		
-		#self.Exit				= Exit
-		
-	#def run(self):
-		#self.channel.basic_consume(callback=self.proccess, queue=self.key)
-		
-		#while not self.Exit.is_set():
-			#self.channel.wait()
-		
-	#def proccess(self, ch, method, properties, body):
-		##method.routing_key
-		#report = pickle.loads( l )
-		#self.netareaMap[ report.netarea ] = report
-
-
-class PerfMonitor:
-	def __init(self):
-		self.ram = 0
-
-class Master:
+class Master(AMQPConsumer):
 	"""
 		@param maxRam used by this server
 		@param maxCore max core used by this server
 	"""
-	def __init__(self, netareas=[], useragent="*",  domainRules={"*":False}, protocolRules={"*":False}, originRules={"*":False}, delay = 36000, maxRam=1<<30, maxCore=-1):
-		
-		self.maxRam			= maxRam
-		self.maxCore		= os.cpu_count() if maxCore == -1 else maxCore #One netarea per core, will be needed when load balncing area
-		
-		self.pool			= []
-		
-		
-		in_workers		= 4
-		done_workers	= 2
-		out_workers		= 2
-		
-		maxRamManager	= int(maxRam / len(netareas))
-		
-		
-		for netarea in netareas :
-			maxInUrlsSize	= Mint(0.025 * maxRam) #1<<22	#maxInUrlsSize 4Mb
-			maxDoneUrlsSize	= Mint(0.025 * maxRam) #1<<22	#maxDoneUrlsSize 4Mb
-			maxOutUrlsSize	= Mint(0.025 * maxRam) #1<<22	#maxOutUrlsSize 4Mb
-			maxRobotsSize	= Mint(0.025 * maxRam) #1<<22 #maxRobotsSize 4Mb
-			maxUrlsMapSize	= Mint(0.900 * maxRam) #Mint(1<<27) #maxUrlMapsSize 128Mb
-			netarea_report = NetareaReport(netarea, 0, maxInUrlsSize+maxDoneUrlsSize+maxOutUrlsSize+maxRobotsSize+maxUrlsMapSize)
-			s = NetareaManager( netarea, in_workers, done_workers, out_workers, maxInUrlsSize, maxDoneUrlsSize, maxOutUrlsSize, useragent, period, domainRules,
-					protocolRules, originRules, delay, maxUrlsMapSize, maxRobotsSize, netarea_report)
-			self.pool.append( (maxInUrlsSize, maxDoneUrlsSize, maxOutUrlsSize, maxRobotsSize, maxUrlsMapSize, s) ) 
-			self.netarea_reports.append( netarea_report )
-			
-		
+	ip					="127.0.0.1"
+	pool				= []
+	Monitor_out_Exit	= Event()
 	
-	def __del__(self):
+	def __init__(self, ip="127.0.0.1", netareas=[], useragent="*",  domainRules={"*":False},
+	protocolRules={"*":False}, originRules={"*":False}, delay = 36000,
+	maxNumNetareas=2, maxRamNetarea=1<<27):
+		AMQPConsumer.__init__(self)
+		self.channel.exchange_declare(exchange='artemis_monitor_master_out', type='direct')
+		self.channel.queue_bind(queue=self.key, exchange='artemis_monitor_master_out', routing_key=self.ip)
+		
+		self.ip					= ip
+		self.useragent			= useragent
+		self.delay				= delay
+		
+		self.domainRules 		= domainRules
+		self.protocolRules		= protocolRules
+		self.originRules		= originRules
+		
+		self.maxNumNetareas		= maxNumNetareas
+		self.maxRamNetarea		= maxRamNetarea
+		
+		self.pool				= []
+		
+		self.Monitor_out_Exit	= Event()
+		
+		self.in_workers			= 4
+		self.done_workers		= 2
+		self.out_workers		= 2
+		
+		self.netarea_reports	={}
+		self.netarea_order 		={} # key=> Value!=None then value=net_tree et prune needed
+		for netarea in netareas :
+			self.start_netareamanager( netarea )
+
+		self.monitor_out	= Monitor_out( self.ip, os.cpu_count(), 0, self.maxNumNetareas, self.netarea_reports, self.Monitor_out_Exit)
+	
+	def start_netareamanager(self, netarea):
+		maxInUrlsSize	= Mint(0.025 * self.maxRamNetarea) #1<<22	#maxInUrlsSize 4Mb
+		maxDoneUrlsSize	= Mint(0.025 * self.maxRamNetarea) #1<<22	#maxDoneUrlsSize 4Mb
+		maxOutUrlsSize	= Mint(0.025 * self.maxRamNetarea) #1<<22	#maxOutUrlsSize 4Mb
+		maxRobotsSize	= Mint(0.025 * self.maxRamNetarea) #1<<22 #maxRobotsSize 4Mb
+		maxUrlsMapSize	= Mint(0.900 * self.maxRamNetarea) #Mint(1<<27) #maxUrlMapsSize 128Mb
+					
+		order = NetareaTree()
+				
+		s = NetareaManager( netarea.netarea, self.in_workers, self.done_workers, self.out_workers, maxInUrlsSize, maxDoneUrlsSize, maxOutUrlsSize, self.useragent, self.domainRules,
+				self.protocolRules, self.originRules, self.delay, maxUrlsMapSize, maxRobotsSize, netarea, order)
+		
+		self.netarea_reports[ netarea.netarea ] = netarea 
+		self.netarea_order[ netarea.netarea ] = order 
+		self.pool.append( s )
+		s.start()
+		
+	def terminate(self):
+		self.Monitor_out_Exit.set()
 		for netareaManager in self.pool:
 			netareaManager.terminate() if netareaManager.is_alive() else () 
 		logging.info("NetareaManagers stoped")
@@ -111,61 +89,72 @@ class Master:
 		for (m,netareaManager) in self.pool:
 			netareaManager.start()
 		logging.info("NetareaManagers started")
-		self.pool[0].join()
+		print("hello")
+		self.channel.basic_consume(callback=self.proccess, queue=self.key)
+		
+		while True:
+			self.channel.wait()
 	
+	def proccess(self, msg):
+		header, args	= unserialize( msg )
+		self.monitor_tr = (report, netTree)
+		AMQPConsumer.process( self, msg)
+		
+		if header == HEADER_NETAREA_PROPAGATION:
+			(netareas, net_tree) = args
+			for netarea in netareas:
+				if netarea.netarea in self.netarea_reports:
+					if netarea.next_netarea != self.netarea_reports[ netarea.netarea ]: #modified
+						self.netarea_reports[ netarea.netarea ].next_netarea 		= netarea.next_netarea
+						self.netarea_reports[ netarea.netarea ].int_next_netarea 	= netarea.int_next_netarea
+						self.netarea_reports[ netarea.netarea ].used_ram 			= 0 
+						
+						self.orders[ netarea.netarea ]								= net_tree
+					else :
+						self.start_netareamanager( netarea )
 	
-	def balance(self):
-		while i<len(master_reports) and not GLOBAL_LOADBALANCING:
-	GLOBAL_LOADBALANCING = master_reports[i].is_overload()
-	i+=1
-		
-		if self.local_balance(0.5):
-			for ((m1, m2, m3, m4, m4, m5, report),netareaMangager) in (self.netarea_reports, self.pool):
-				m1.value = report.max_ram * 0.025
-				m2.value = report.max_ram * 0.025
-				m3.value = report.max_ram * 0.025
-				m4.value = report.max_ram * 0.025
-				m5.value = report.max_ram * 0.9
-				
-				
-	def local_balance(self, coef):
+class Monitor_out(AMQPProducer,Thread):
+	def __init__(self, ip, num_core, maxRam, maxNumNetareas, netarea_reports, Exit) :
 		"""
-			Balance ressources between running netmanager
-			between coef and max_coef =0.95
-		"""
+			@param net_area id that descibe the partition of the net managed by this master
+			@param in_urls			incomming RecordUrl type
+		"""		
+		Thread.__init__(self)
+		AMQPProducer.__init__(self,"artemis_monitor_in")
 		
-		master = MasterReport( self.ip, self.num_core, self.maxRam, self.netarea_reports)
-		overload_netareas = []
+		self.ip				= ip
+		self.num_core		= num_core
+		self.maxRam			= maxRam
+		self.maxNumNetareas	= maxNumNetareas
+		self.netarea_reports= netarea_reports
+	
+	def terminate(self):
+		AMQPProducer.terminate(self)
+
+	def run(self):
+		self.channel.basic_consume(callback=self.proccess, queue=self.key)
 		
-		for netarea in self.netarea_reports:
-			if netarea.
-			ram_needed = (netarea.load()-coef) * netarea.max_ram
-			if ram_needed < 0:
-				pass
-			elif master.free_ram > ram_needed:
-				netarea.max_ram	+= ram_needed
-				master.calcul_used_ram()
-				master.calcul_free_ram()
-			elif master.garbage_collector():
-				local_loadbalancing(coef, master)
-			elif coef<0.95 :
-				local_loadbalancing( coef+0.5, master )
-			else:
-				return False
+		while not self.Exit.is_set():
+			report = MasterReport( self.ip, self.num_core, self.maxRam, self.maxNumNetareas, self.netarea_reports.values() )
+			self.producer.add_task( serialize( report ) )
+			time.sleep(1)
 		
-		return True
+	def proccess(self, msg):
+		(report, netTree)	= unserialize( msg )
+		self.monitor_tr = (report, netTree)
+		
+		AMQPConsumer.process( self, msg)
 	
 class NetareaManager(Process, AMQPProducer):
 	"""
 		Warning : One netareamanager by netarea on the whole network
 	"""
 	Exit				= Event()
-	def __init__(self, netarea, in_workers, done_workers, out_workers, maxInUrlsSize, maxDoneUrlsSize, maxOutUrlsSize, useragent, period, domainRules,
-					protocolRules, originRules, delay, maxUrlsMapSize, maxRobotsSize, netarea_report) :
+	def __init__(self, netarea, in_workers, done_workers, out_workers, maxInUrlsSize, maxDoneUrlsSize, maxOutUrlsSize, useragent, domainRules,
+					protocolRules, originRules, delay, maxUrlsMapSize, maxRobotsSize, netarea_report, order) :
 		"""
 			@param netarea			- netarea object, its id is uniq
 			@param useragent		- 
-			@param period			- period between to wake up
 			@param domainRules		- { "domain1" : bool (true ie allowed False forbiden) }, "*" is the default rule
 			@param protocolRules	- { "protocol1" : bool (true ie allowed False forbiden) }, "*" is the default protocol
 			@param originRules		- { "origin1" : bool (true ie allowed False forbiden) }, "*" is the default origin,
@@ -175,9 +164,6 @@ class NetareaManager(Process, AMQPProducer):
 			@param numOverseer		- 
 		"""
 		Process.__init__(self)
-		#AMQPProducer.__init__(self, "artemis_health") when we will use dynamic netarea
-		#self.channel.exchange_declare(exchange='artemis_health_direct', type='direct')
-		#self.channel.queue_declare(self.key, durable=False)
 		
 		self.in_urls			= LimitedDeque( maxInUrlsSize )
 		self.done_urls			= LimitedDeque( maxDoneUrlsSize )
@@ -186,13 +172,14 @@ class NetareaManager(Process, AMQPProducer):
 		self.ValidatorExit		= Event()
 		self.OutExit		    = Event()
 		
-		self.report		= netarea_report
+		self.report				= netarea_report
+		self.order				= order
 		
 		self.in_pool			= [ In_Worker(net_area, self.in_urls, self.InExit ) for k in range(in_workers) ]	
 		self.done_pool			= [ Done_Worker(net_area, self.done_urls, self.DoneExit ) for k in range(done_workers) ]	
-		sef.validator			= Validator(useragent, period, domainRules, protocolRules, originRules, delay,
+		sef.validator			= Validator(useragent, domainRules, protocolRules, originRules, delay,
 											maxUrlsMapSize, maxRobotsSize, self.in_urls, self.done_urls, self.out_urls,
-											self.report, self.ValidatorExit )	
+											self.report, self.order, self.ValidatorExit )	
 		self.out_pool			= [ Out_Worker(self.out_urls, self.OutExit ) for k in range(out_workers) ]	
 		
 		
@@ -236,12 +223,8 @@ class NetareaManager(Process, AMQPProducer):
 		for w in self.out_pool:
 			w.start()
 			
-		#max_ram = self.maxInUrlsSize + self.maxOutUrlsSize + self.maxUrlsMapSize + self.maxRobotsSize
-		#self.channel.basic_consume(callback=self.proccess, queue=self.key)
-
 		while True:
-			#self.add_task( HealthReport(self.net_area, max_ram ), echange="artemis_health_direct", routing_key="master" )
-			sleep(10) #for now, after load balancing of network area and  helathreoport to the Master
+			sleep(10)
 
 class In_Worker(AMQPConsumer, Thread ):
 	def __init__(self, net_area, in_urls, Exit) :
@@ -301,11 +284,10 @@ class Validator( Thread ):
 	"""
 		@brief One validator per Server
 	"""
-	def __init__(self, useragent, period, delay,
-				maxUrlsMapSize, maxRobotsSize, in_urls, done_urls, out_urls, report, Exit) :
+	def __init__(self, useragent, delay,
+				maxUrlsMapSize, maxRobotsSize, in_urls, done_urls, out_urls, report, order, Exit) :
 		"""
 			@param useragent		- 
-			@param period			- period between to wake up
 			@param delay			- default period between two crawl of the same page
 			@param maxRamSize		- maxsize of the urls list kept in ram( in Bytes )
 			@param in_urls			- urls incomming
@@ -315,7 +297,6 @@ class Validator( Thread ):
 		Thread.__init__(self)
 		
 		self.useragent 			= useragent
-		self.period				= period # delay(second) betwen two crawl
 		self.delay				= delay # de maj
 		
 		self.maxRamSize			= maxRamSize
@@ -326,7 +307,8 @@ class Validator( Thread ):
 		self.out_urls			= out_urls
 		self.robotsMap			= RobotCacheHandler( maxRobotsSize )	
 		
-		self.report		= report
+		self.report				= report
+		self.order				= order
 		self.Exit				= Exit
 		
 	def is_valid(self, urlRecord):
@@ -372,6 +354,9 @@ class Validator( Thread ):
 			
 	def run(self):
 		while not self.Exit.is_set():
+			if self.order.hight != -1 :
+				self.prune()
+				
 			self.refresh()
 			self.validate()
 			self.update()
@@ -384,7 +369,21 @@ class Validator( Thread ):
 		#empty in_urls
 		self.refresh()
 		self.validate()	
-
+	
+	def prune(self):
+		"""
+			When the current netarea is split send  the url not needed 
+		"""
+		self.done_producer			= AMQPProducer.AMQPProducer("artemis_master_done")
+		self.done_producer.channel.exchange_declare(exchange='artemis_master_done_direct', type='direct')
+		self.done_producer.channel.queue_declare("artemis_master_done", durable=False)
+		
+		for url in self.urlsMap.keys():
+			key	= self.order.search( Phi(urlRecord) ).netarea
+			if key != report.netarea :
+				self.new_producer.add_task( serialize( self.urlsMap[url] ), echange="artemis_master_done_direct", routing_key=key  )
+				self.urlsMap.pop( url )
+		
 class Out_Worker(AMQPProducer, Thread ):
 	def __init__(self, out_urls, Exit) :
 		"""

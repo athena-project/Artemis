@@ -1,5 +1,5 @@
 class Mint:
-	def __init__( v ):
+	def __init__(self, v ):
 		self.value = v
 	
 	def __eq__(self, value):

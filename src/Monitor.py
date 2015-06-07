@@ -10,6 +10,9 @@ import RobotCacheHandler
 from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
 
+HEADER_SENDER_STOP 	= 0x0
+HEADER_SENDER_START	= 0x1#argument net_tree
+HEADER_NETAREA_PROPAGATION = 0x2#argument netareas reports
 
 class In_Monitor(AMQPConsumer, Thread ):
 	def __init__(self, reports, Exit) :
@@ -36,10 +39,11 @@ class In_Monitor(AMQPConsumer, Thread ):
 		AMQPConsumer.process( self, msg)
 
 class Monitor:
-	def __init__(self, in_workers):
+	def __init__(self, in_monitors, limitFreeMasters):
 		
 		self.in_pool	=[]
 		self.reports 	= {} #received reports from masters
+		self.limitFreeMasters = limitFreeMasters
 		self.Exit 		= Exit()
 		
 		self.producer	= AMQPProducer.__init__(self, "artemis_monitor_out")
@@ -47,114 +51,75 @@ class Monitor:
 		self.producer.channel.exchange_declare(exchange='artemis_monitor_slave_out', type='fanout')
 
 		
-		for k in range(in_workers):
-			self.in_pool.append( In_Monitor(self.reports, self.Exit)
+		for k in range(in_monitors):
+			self.in_pool.append( In_Monitor(self.reports, self.Exit) )
 	
 	def is_overload(self):
-		for reports in self.reports.values():
-			if repot.is_overload():
-				return True
+		for report in self.reports.values():
+			for netarea in report.netarea_reports:
+				if netarea.is_overload():
+					return True
 		return False
-		
-	def localized_loadbalancing(self):
-		copy_master_reports = copy.deepcopy( self.reports.values() ) # instantané
-		overload_netareas = []
-		for master in copy_master_reports:
-			master.garbage_collector(coef)
-			
-			for netarea in mastre.netarea_reports:
-				if netarea.overload():
-					overload_netareas.append( netarea )
-					master.netarea_reports.suppr(netare)
-					
-			master.calcul_used_ram()
-			master.calcul_free_ram()
-			if master.free_ram > 0:
-				free_masters.append(master)
-				
-		free_maters.sort(key=lambda master: -1*master.free_ram) 
-		overload_netareas.sort(key=lambda netarea: -1*(1+netarea.load()-coef)*netarea.max_ram)
-		
-		for netarea in overload_netareas:
-			needed_ram = (1+netarea.load()-coef) * netarea.max_ram
-			if needed_ram < free_masters[0].free_ram :
-				free_masters[0].netarea_reports.append( needed_ram )
-				
-				master.calcul_used_ram()
-				master.calcul_free_ram()
-				free_maters.sort(key=lambda master: -1*master.free_ram) 
-			elif coef<0.8 :
-				global_loadbalancing_1(coef+0.1, master_reports)
-			else:
-				return (False, None)
-				
-		return (True, copy_master_reports)
-	
-	def global_loadbalancing(self):
-		netareas = []
-		masters  = []
-		global_max_ram = 0
-		
-		masters.append( copy.deepcopy(self.reports.values()) )
-		masters[-1].netareas_reports = [] 
-		
-		needed_ram=0
-		for netarea in netareas:
-			needed_ram += (1+netarea.load()-coef) * netarea.max_ram
-			
-		#Si une solution peut être trouvée
-		if needed_ram>global_max_ram:
-			return (False, None)
-		
-		netareas.sort(key=lambda netarea : -1*(1+netarea.load()-coef) * netarea.max_ram)
-		netareas_n=netareas
-		netarea_n.sort((key=lambda netarea :netarea.netarea)
-		masters.sort(key=lambda master : -1*master.max_ram)
-		
-		#Allocation de la plus lourde netarea au master le plus robuste
-		while netareas:
-			netarea = netareas.pop()
-			if 1+netarea.load()-coef) * netarea.max_ram < masters[0].max_ram : #on alloue
-				masters[0].netareas_reports.append( netarea )
-			else: #il faut decouper
-				index = netareas_n.index( netarea) +1
-				next_netarea = netareas_n[ index ] if index < len(next_netarea) else MAX
-				netareas.extend( netarea.split( (1-coef) * masters[0].max_ram ,next_netarea ) )
-			
-			netareas.sort(key=lambda netarea : -1*(1+netarea.load()-coef) * netarea.max_ram) # ici on pourrait réinserer à la bonne place (dichotomie) pour eviter les trie
-			masters.sort(key=lambda master : -1*master.max_ram)
-		
-		return (True, masters)
 		
 	def balance(self):
 		if not self.is_overload():
 			return 
 		
-		flag, new_reports = self.localized_loadbalancing()
-		if not flag:
-			flag, new_reports = self.global_loadbalancing()
+		masters =  copy.deepcopy(self.reports.values())
+		unallocated_netarea	= []
+
+		for master in masters:
+			for netarea in master.netarea_reports:
+				if netarea.is_overload():
+					net1	= netarea.split()
+					
+					if not master.is_overload():
+						master.allocate( net1 )
+					else:
+						unallocated_netarea.append(net1)
 		
-		if not flag:
-			logging.critical("System overloaded - new master needed")
+		free_masters = [ master for master in masters if not master.is_overload() ]
+		try:
+			for netarea in unallocated_netarea:
+				free_masters[-1].allocate( netarea )
+				free_masters.pop() if free_masters[-1].is_overload() else ()
+			
+			if sum([ int(not master.is_overload()) for master in masters ]) < self.limitFreeMasters:
+				logging.warning( "Masters should be added, system will be soon overload")
+			
+		except Exception: # if not a free_master remains
+			logging.critical( "Masters must be added, system is overload")
 		
+		return masters
+		
+	def propagate(self, masters):
 		net_tree = NetareaTree()
-		for master in new_reports:
-			self.producer.add_task( serialize( master ) , echange="artemis_monitor_master_out", routing_key=master.ip  )
+		for master in masters:
 			for netarea in master.netarea_reports:
 				net_tree[netarea.netarea]=netarea
 		
-		#va falloir un truc pour synchroniser
+		#Stop Slave.sender
+		header 	= HEADER_SENDER_STOP
+		args 	= None
+		self.producer.add_task( serialize( (header, args) ) , echange="artemis_monitor_slave_out")
+		time.sleep(12)
+		 
+		#Start new netarea
+		for master in masters:
+			header 	= HEADER_NETAREA_PROPAGATION
+			args 	= (master, net_tree)
+			self.producer.add_task( serialize( (header, args) ) , echange="artemis_monitor_master_out", routing_key=master.ip  )
+		time.sleep(12)
 		
-		self.producer.add_task( serialize(net_tree) , echange="artemis_monitor_slave_out")
+		#Start Slave.sender
+		header 	= HEADER_SENDER_START
+		args 	= net_tree
+		self.producer.add_task( serialize( (header, args) ) , echange="artemis_monitor_slave_out")
 		
-		return (new_reports, net_tree)
-		
-		
-
 	def run(self):
 		for w in self.in_pool:
 			w.start()
 		
 		while True:
 			self.balance()
-			time.sleep(30)
+			time.sleep(60)

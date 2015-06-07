@@ -41,14 +41,16 @@ class RedisUrlsManager:
 		self.conn = conn if conn != None else RedisFactory.getConn()
 		
 	def get( self, key):
-		return self.conn.get(  'ressource_'+key )
-	
+		buff = self.conn.get(  'ressource_'+key )
+		buff = buff.split(":")
+		return Ressource( int(buff[1]), int(buff[0]))
+		
 	def add( self, ressources, urls):
 		"""
 			url_hasofurl => type_class:id
 		"""
 		for (ressource,url) in (ressources,urls) :
-			self.conn.set(  'ressource_'+urls.lasthash , ressource.type_class+":"+ressource.id)
+			self.conn.set(  'ressource_'+urls.lasthash , ressource.getClass_type()+":"+ressource.getId())
 
 
 #Static function
@@ -76,16 +78,5 @@ class UrlRecord:
 		
 	def is_expediable(self, delay):
 		return time.time() - self.lastvisited >  self.refreshrate * delay
-
-def serializeList(l):
-	return pickle.dumps( l )
-	
-		
-def unserialize(s):
-	return pickle.loads( l )
-	
-
-def unserializeList(s):
-	return pickle.loads( l )
 
 

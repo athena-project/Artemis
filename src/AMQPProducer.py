@@ -1,17 +1,18 @@
-import AMQPFactory
+from .AMQPFactory import *
 from amqp import *
-
+import logging
 
 class AMQPProducer:
 	def __init__(self, key):
-		self.conn 	= AMQPFactory.getConn()
+		self.conn 	= getConn()
 		self.key	= key
 		self.channel=channel = self.conn.channel()
 		
 		self.channel.queue_declare(self.key, durable=False)
 		
-	def __del__(self):
+	def terminate(self):
 		self.conn.close()
+		
 	
 	def add_task(self, task, exchange="", routing_key="" ):		
 		msg 	= Message( task )

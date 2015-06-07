@@ -174,7 +174,7 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 		elif  key>self.key:
 			self.right.suppr(key)
 		else:
-			if self.right = None:
+			if self.right == None:
 				self.key= self.left.key
 				self.value = self.left.value
 				self.left = self.left.left

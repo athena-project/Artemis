@@ -14,12 +14,9 @@ from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
 
 import Url
-	
-from contentTypeRules import *
-import AMQPConsumer
-import AMQPProducer
+from  AMQPConsumer import *
+from  AMQPProducer import *
 
-import redis_lock
 
 import logging
 
@@ -40,7 +37,7 @@ class In_Interface(AMQPConsumer, Thread ):
 		self.urls			= urls
 		self.Exit			= Exit
 		
-	def run(self): LIMITER KE NOMBRE
+	def run(self): 
 		self.channel.basic_consume(callback=self.proccess, queue=self.key)
 		
 		while not self.Exit.is_set():
@@ -51,7 +48,7 @@ class In_Interface(AMQPConsumer, Thread ):
 	def proccess(self, msg):
 		self.urls.extend( Url.unserialize( msg.body ) )
 		AMQPConsumer.process( self, msg)
-			
+
 class Sender( Thread ): 
 	def __init__(self, newUrls, doneUrls, netTree, domainRules, protocolRules, originRules, delay, Exit):
 		"""
@@ -69,12 +66,11 @@ class Sender( Thread ):
 		self.new_producer			= AMQPProducer.AMQPProducer("artemis_master_in")
 		self.new_producer.channel.exchange_declare(exchange='artemis_master_in_direct', type='direct')
 		self.new_producer.channel.queue_declare("artemis_master_in", durable=False)
-		
+
 		self.done_producer			= AMQPProducer.AMQPProducer("artemis_master_done")
 		self.done_producer.channel.exchange_declare(exchange='artemis_master_done_direct', type='direct')
 		self.done_producer.channel.queue_declare("artemis_master_done", durable=False)
 
-		
 		self.newUrls		= newUrls
 		self.doneUrls	= doneUrls
 		self.netTree		= netTree
@@ -86,10 +82,10 @@ class Sender( Thread ):
 		self.delay			= delay
 		self.alreadySent	= LimitedDict( 1<<22 ) #voir la taille
 		self.Exit			= Exit
-	
+
 	def __del__(self):
 		logging.info("Sender stopped")
-	
+
 	def is_valid(self, urlRecord):
 		"""
 			@brief			- it will chek 
@@ -114,7 +110,7 @@ class Sender( Thread ):
 			  
 		self.alreadySend[url]=urlRecord
 		return True
-		
+
 	def process(self):
 		nUrls=[] #only valid and fresh urls
 		
@@ -127,20 +123,20 @@ class Sender( Thread ):
 			urlRecord 	= nUrls.pop()
 			key	= self.netTree.search( Phi(urlRecord) ).netarea
 			
-			self.new_producer.add_task( Url.serialse(urlRecord), echange="artemis_master_in_direct", routing_key=key  )
+			self.new_producer.add_task( serialize(urlRecord), echange="artemis_master_in_direct", routing_key=key  )
 			
 		while self.doneUrls :
 			urlRecord = self.doneUrls.popleft()
 			key	= self.netTree.search( Phi(urlRecord) ).netarea
-			self.new_producer.add_task( Url.serialse(urlRecord), echange="artemis_master_done_direct", routing_key=key  )
-			 	
+			self.new_producer.add_task( serialize(urlRecord), echange="artemis_master_done_direct", routing_key=key  )
+
 	def run(self):
 		while not self.Exit.is_set():
 			self.process()
 			time.sleep(1)
 		
 		self.process()
-			
+
 class CrawlerOverseer( Thread ):
 	def __init__(self, useragent, maxCrawlers,  urls, doneUrls, newUrls, contentTypes, delay, unorderedRessource, Exit):
 		"""
@@ -195,7 +191,7 @@ class CrawlerOverseer( Thread ):
 			for i in len(self.crawlers):
 				if not self.crawlers[i].is_alive():
 					del self.crawlers[i]
-		
+
 class Crawler( Thread ): 
 	def __init__(self, useragent,  urls, doneUrls, newUrls, contentTypes, delay, unorderedRessource, Exit):
 		"""
@@ -273,7 +269,7 @@ class Crawler( Thread ):
 			conn1.close()
 			if (r1.status == 301 or r1.status ==302 or r2.status ==307 or r2.status ==308) and "Location" in r1.headers.dict: #redirection
 				urlRecord.incr()
-				self.newUrls.append( UrlRecord(r1.headers.dict["Location"])
+				self.newUrls.append( UrlRecord(r1.headers.dict["Location"]) )
 				self.doneUrls.append( urlRecord )
 				return
 			elif r1.status == 304 : #Content unchange
@@ -300,7 +296,7 @@ class Crawler( Thread ):
 		r2 = conn.getresponse()
 		if (r2.status == 301 or r2.status ==302 or r2.status ==307 or r2.status ==308) and "Location" in r1.headers.dict: #redirection
 			urlRecord.incr()
-			self.newUrls.append( UrlRecord(r1.headers.dict["Location"])
+			self.newUrls.append( UrlRecord(r1.headers.dict["Location"]) )
 			self.doneUrls.append( urlRecord )
 			return
 		elif r1.status != 200 : #ie 4xx or 5xx error
@@ -329,36 +325,38 @@ class Crawler( Thread ):
 		h_sha512 = m_sha512.hexdigest()
 		
 		
-		#Deduplication
+		
+		
+		ressource 	= Ressource(0, getClassType( contentType )) 
+		metadata	= ressource.getMetadata()
+		
 		if h_sha512 == urlRecord.lasthash :
 			urlRecord.incr()
 			self.doneUrls.append( urlRecord )
 			return 
-			
+		
 		urlRecord.lasthash = h_sha512
-		formerRessource = self.redisUrlManager.get( "ressource_"+h_sha512)
-		if formerRessource !=None :
-			#ressource pointe sur former ressource 
-		#else : delocalise dans SQL
-			#self.redisUrlManager.add( "url_"+h_sha512 , )
+
 		
-		EN ATTENTE DE D2FINITION DE RESSOURCE DOCUMENT METADATA ETC ....
-		#rType						= contentTypeRules[ contentType ] 
-		#ressource					= rTypes[ rType ][0]()
-		#ressource.url				= url.url
-		#ressource.data				= data
+				
+		metadata["source_type"]		= self.useragent
+		metadata["source_location"]	= url.url
+		metadata["source_time"]		= urlRecord.lastvisited
 		
-		#class_type rename class atttribut, ressource class mère de document contient metadata
+		metadata["contentType"]		= contentType
+		metadata["sha512"]			= h_sha512
+		metadata["size"]			= len( data )
 		
-		self.unorderedRessources[ class_type ].append( (urlRecord, ressource) )
+		ressource.setData( data)
+				
+		self.unorderedRessources[ ressource.getClass_type() ].append( (urlRecord, ressource) )
 		urls = ressource.extractUrls( urlObj )
 		self.newUrls.extend( urls )
 		
 		urlRecord.decr()
 		self.doneUrls.append( urlRecord )
 
-
-class SQLHandler( Thread ):							
+class SQLHandler( Thread ):
 	def __init__(self,  number, unorderedRessources, orderedRessources, Exit):	
 		"""
 			@param number				- insert and update pool size
@@ -393,8 +391,13 @@ class SQLHandler( Thread ):
 					urlRecord, ressource = self.unorderedRessources[class_type].popleft()
 					ressources.append( ressource )
 					urls.append( urlRecord, ressource )
+					
+					#Deduplication
+					formerRessource = self.redisUrlManager.get( "ressource_"+urlRecord.lastHash)
+					if formerRessource != None :
+						metadata.addReference( formerRessource )
 				
-				self.manager.insert(class_type, ressources) #INSERT MUST UPDATE ID, INDEED THIS NEW RESSOURCE BECAUSE A RESSOURCE IS DEFINI BY A 4-uplets time and space locations
+				self.manager.insert(class_type, ressources)
 				self.sqlUrlManager.save(urls)
 				self.redisUrlManager.add( ressources, urls)
 				
@@ -429,7 +432,7 @@ class WorkerOverseer(Thread):
 		self.dfs_path			= dfs_path
 		self.Exit 				= Exit
 		
-		self.workers			= []
+		self.workers			= []
 
 	def __del__(self):
 		self.Exit.set()	
@@ -478,7 +481,7 @@ class Worker(Thread):
 			time.sleep(1)
 			
 		self.process()
-		
+
 class Out_Interface(AMQPProducer, Thread ):
 	def __init__(self, savedRessources, Exit) :
 		Thread.__init__(self)
@@ -512,11 +515,10 @@ class Out_Interface(AMQPProducer, Thread ):
 		RESSOURCE_BUNDLE_LEN = 1
 		self.add_tasks()
 
-		
 class Server(Process):
 	def __init__(self, useragent, maxCrawlers, maxWorkers, delay, sqlNumber, dfs_path, contentTypes,
-				domainRules, protocolRules, originRules, maxUrlsSize, maxNewUrlsSize, maxDoneUrlsSize, maxUnorderedRessourcesSize,
-				maxUnorderedRessourcesSize, maxSavedRessourcesSize) :
+				domainRules, protocolRules, originRules, maxUrlsSize, maxNewUrlsSize, maxDoneUrlsSize,
+				maxUnorderedRessourcesSize, maxOrderedRessourcesSize, maxSavedRessourcesSize) :
 		"""
 			@param useragent		- 
 			@param period			- period between to wake up
@@ -554,7 +556,7 @@ class Server(Process):
 		self.newUrls			= LimitedDeque( maxNewUrlsSize )
 		self.doneUrls			= LimitedDeque( maxDoneUrlsSize )
 		self.unorderedRessources= LimitedDeque( maxUnorderedRessourcesSize )
-		self.orderedRessources	= LimitedDeque( maxUnorderedRessourcesSize )
+		self.orderedRessources	= LimitedDeque( maxOrderedRessourcesSize )
 		self.savedRessources	= LimitedDeque( maxSavedRessourcesSize )
 		
 
@@ -573,6 +575,15 @@ class Server(Process):
 	def __del__(self):
 		self.terminate()
 	
+	def start_sender(self):
+		self.sender	= Sender( self.newUrls, self.doneUrls, self.netTree, self.domainRules, self.protocolRules, self.originRules, 
+							self.delay, self.Sender_Exit)	
+		self.sender.start()
+				
+	def stop_sender(self):
+		self.Sender_Exit.set()
+		while self.sender.is_alive():
+			time.sleep(1)
 	def terminate(self):
 		self.In_Interface_Exit.set()
 		while self.inInterface.is_alive():
@@ -582,9 +593,7 @@ class Server(Process):
 		while self.crawlerOverseer.is_alive():
 			time.sleep(1)
 		
-		self.Sender_Exit.set()
-		while self.sender.is_alive():
-			time.sleep(1)
+		self.stop_sender()
 			
 		self.SQLHandler_Exit.set()
 		while self.sqlHandler.is_alive():
@@ -604,8 +613,7 @@ class Server(Process):
 		self.inInterface	= In_Interface( self.urls, self.maxUrls, self.In_Interface_Exit)
 		self.crawlerOverseer= CrawlerOverseer( self.useragent, self.maxCrawlers,  self.urls, self.doneUrls, self.newUrls,
 												self.contentTypes, self.delay, self.unorderedRessource, self.CrawlerOverseer_Exit)
-		self.sender			= Sender( self.newUrls, self.doneUrls, self.netTree, self.domainRules, self.protocolRules, self.originRules, 
-									self.delay, self.Sender_Exit)										
+		self.start_sender()		
 		self.sqlHandler		= SqlHandler(self.numberSql, self.unorderedRessources, self.orderedRessources, self.SQLHandler_Exit)						
 		self.workerOverseer	= WorkerOverseer( self.maxWorkers, self.dfs_path, self.orderedRessources, self.savedRessources,  self.WorkerOverseer_Exit)				
 		self.outInterface	= Out_Interface( self.savedRessources, self.Out_Interface_Exit) 
@@ -624,27 +632,32 @@ class Server(Process):
 		
 		while True: 
 			self.channel.wait() 
-			time.sleep(1)
 	
 	def proccess(self, msg):
-		self.netTree =  unserialize( msg.body )
+		(header, args) =  unserialize( msg.body )
 		AMQPConsumer.process( self, msg)
+		
+		if header == Monitor.HEADER_SENDER_STOP:
+			self.stop_sender()
+		elif header == Monitor.HEADER_SENDER_START:
+			self.netTree	= args
+			self.start_sender()
 
-class Slave: A faire
-	def __init__(self, serverNumber=1, useragent="*", period=10, maxWorkers=2, contentTypes={"*":False},
-		delay=86400, maxCrawlers=1, sqlNumber=100, maxNewUrls=10000) :
-			
+class Slave:
+	def __init__(self, serverNumber=1, useragent="*", period=10, maxCrawlers=1, maxWorkers=2,
+		delay=86400, sqlNumber=100, dfs_path="", contentTypes={"*":False}, domainRules={"*":False},
+		originRules={"*":False}, maxNewUrlsSize=1<<24, maxDoneUrlsSize=1<<24, maxUnorderedRessourcesSize=1<<26,
+		maxOrderedRessourcesSize=1<<26, maxSavedRessourcesSize=1<<26) :
+		
 		self.pool			= []
 		self.serverNumber 	= serverNumber
 		
-		for i in range(0, self.serverNumber):
+		for i in range(self.serverNumber):
 			s = Server(useragent, maxCrawlers, maxWorkers, delay, sqlNumber, dfs_path, contentTypes,
 				domainRules, protocolRules, originRules, maxUrlsSize, maxNewUrlsSize, maxDoneUrlsSize, maxUnorderedRessourcesSize,
-				maxUnorderedRessourcesSize, maxSavedRessourcesSize)
+				maxOrderedRessourcesSize, maxSavedRessourcesSize)
 			self.pool.append( s )
-			
-		logging.info("Servers started")
-	
+
 	def __del__(self):
 		for server in self.pool:
 			server.terminate() if server.is_alive() else () 
@@ -654,4 +667,6 @@ class Slave: A faire
 	def harness(self):
 		for server in self.pool:
 			server.start()
+
+		logging.info("Servers started")
 		self.pool[0].join()
