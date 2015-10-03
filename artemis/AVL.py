@@ -9,6 +9,9 @@ class AVL:
 	def hight(self):
 		return -1 if self.root==None else self.root.hight
 		
+	def empty(self):
+		return self.root==None
+		
 	def add(self, node):
 		if self.root != None:
 			self.root.add(node)
@@ -28,6 +31,9 @@ class AVL:
 	def __str__(self):
 		return "Nodes : "+str(self.number)+"\n"+self.root.str(0)
 		
+	def update(self, avlB):
+		self.number = avlB.number
+		self.root 	= avlB.root
 class AVLNode:#see Yves le maire exo6.3 AVL
 	def __init__(self, key="", value=None, left=None, right=None):
 		self.key = key

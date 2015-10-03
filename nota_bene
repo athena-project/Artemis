@@ -1,0 +1,3 @@
+-> Uncomment initTor in CrawlerOverseer.__init__
+-> set sleep(s) to 12(at least) in Monitor.propagate 
+-> set sleep to 60(at least) in Monitor.run

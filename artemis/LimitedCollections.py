@@ -1,5 +1,7 @@
 import sys
 import collections
+import shelve 
+import tempfile
 
 class Item:
 	def __init__(self, priority, key):
@@ -72,6 +74,75 @@ class LimitedDict( collections.UserDict ): #limited in memory
 		it.incr()
 		return item
 		
+class HybridDict(collections.UserDict):
+	"""
+		both ram and hard memory
+	"""	
+	def __init__(self, ram_max, local_max):
+		""" insertion not allowed if mem_max reached"""
+		collections.UserDict.__init__(self, None)
+		
+		self.ram_length = 0
+		self.local_length = 0
+		self.ram_max = ram_max
+		self.local_max = local_max
+		
+		self.accessmap		= [] # heapq
+		self.suppr_fact   	= 100
+		
+		self.tmpFile		= tempfile.TemporaryDirectory(prefix="hybrid_dict", suffix=str(id(self)) )
+		self.local_data		= shelve.open( self.tmpFile.name+"/1" )
+	
+	def __del__(self):
+		self.local_data.close()
+		self.tmpFile.close()
+		
+	def __delitem__(self, key): 
+		if key in self.data:
+			self.ram_length -= sys.getsizeof( self.data[key] )
+			collections.UserDict.__delitem__(self, key)
+		
+		if key in self.local_data:
+			self.local_length -= sys.getsizeof( self.data[key] )
+			del self.local_data[ key ]
+
+	def prune_ram(self, length):
+		length = min( self.ram_max-1, self.suppr_fact * length )
+		while  self.ram_length + length > self.ram_max :
+			self.accessmap.sort()
+			it = self.accessmap.pop()
+			self.__delitem__( it.key )
+			del it
+		self.local_data.sync()
+		
+	def __setitem__(self, key, item):
+		if key in self.data:
+			collections.UserDict.__delitem__(self, key)
+		if key in self.local_data:
+			del self.local_data[ key ]
+
+		if  sys.getsizeof( item ) + self.local_length > self.local_max :
+			raise Exception( "no more memory")
+		
+		if self.ram_max + sys.getsizeof( item ) > self.ram_max :
+			self.prune_ram( sys.getsizeof( item ) ) 
+			
+		self.ram_length += sys.getsizeof( item )
+		self.local_length += sys.getsizeof( item )
+		
+		it = Item( 0, key)
+		self.accessmap.append( it )
+			
+		collections.UserDict.__setitem__(self, key, (it,item))
+		self.local_data[key] = item
+	
+	def __getitem__(self, key):
+		if key in self.data:
+			it, item = collections.UserDict.__getitem__(self, key)
+			it.incr()
+		else:
+			item = self.local_data[ key ]
+		return item
 	
 class LimitedDeque:
 	def __init__(self, mem_max):
@@ -111,9 +182,9 @@ class LimitedDeque:
 		self.mem_length -= sys.getsizeof( tmp )
 		return tmp
 	
-	
-	
-	
+	def extend(self, items):
+		for item in items:
+			self.append( item )
 import unittest
 class TestNet(unittest.TestCase):
 	def test_limited_dict(self):

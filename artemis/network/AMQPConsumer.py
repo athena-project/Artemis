@@ -5,10 +5,12 @@ from amqp import *
 
 class AMQPConsumer:
 	def __init__(self, key=None, ack=False):
-		self.conn 	= getConn()
-		self.channel = self.conn.channel()
+		self.conn 		= getConn()
+		self.channel 	= self.conn.channel()
+		self.ack		= ack
+		
 		if ack:
-				self.channel.basic_qos(0 , 10, False)
+			self.channel.basic_qos(0 , 10, False)
 				
 		if key != None:
 			self.key	= key
@@ -25,6 +27,6 @@ class AMQPConsumer:
 		while True:
 			self.channel.wait()
 
-	def proccess(self, msg):
-		if ack:
+	def process(self, msg):
+		if self.ack:
 			self.channel.basic_ack(msg.delivery_tag)

@@ -29,16 +29,16 @@ class RobotFileParser( urllib.robotparser.RobotFileParser) :
 		#   1: saw user-agent line
 		#   2: saw an allow or disallow line
 		state = 0
-		entry = Entry()
+		entry = urllib.robotparser.Entry()
 
 		for line in lines:
 			if not line:
 				if state == 1:
-					entry = Entry()
+					entry = urllib.robotparser.Entry()
 					state = 0
 				elif state == 2:
 					self._add_entry(entry)
-					entry = Entry()
+					entry = urllib.robotparser.Entry()
 					state = 0
 			# remove optional comment and strip line
 			i = line.find('#')
@@ -47,6 +47,7 @@ class RobotFileParser( urllib.robotparser.RobotFileParser) :
 			line = line.strip()
 			if not line:
 				continue
+
 			line = line.split(':', 1)
 			if len(line) == 2:
 				line[0] = line[0].strip().lower()
@@ -54,16 +55,16 @@ class RobotFileParser( urllib.robotparser.RobotFileParser) :
 				if line[0] == "user-agent":
 					if state == 2:
 						self._add_entry(entry)
-						entry = Entry()
+						entry = urllib.robotparser.Entry()
 					entry.useragents.append(line[1])
 					state = 1
 				elif line[0] == "disallow":
 					if state != 0:
-						entry.rulelines.append(RuleLine(line[1], False))
+						entry.rulelines.append( urllib.robotparser.RuleLine(line[1], False))
 						state = 2
 				elif line[0] == "allow":
 					if state != 0:
-						entry.rulelines.append(RuleLine(line[1], True))
+						entry.rulelines.append( urllib.robotparser.RuleLine(line[1], True))
 						state = 2
 				elif line[0] == "sitemap":
 					self.sitemap = line[1]
@@ -71,11 +72,11 @@ class RobotFileParser( urllib.robotparser.RobotFileParser) :
 			self._add_entry(entry)
 
 class Robot:
-	def __init__(self, robotparser, url, deathtime):
+	def __init__(self, robotparser, url, deathtime, useragent):
 		self.robotparser = robotparser
 		self.deathtime = deathtime
-		self.robotparser.set_url( key )
-		
+		self.robotparser.set_url( url )
+		self.useragent	= useragent
 		
 	def update(self):
 		try:
@@ -86,9 +87,12 @@ class Robot:
 			
 	def is_alive(self):
 		return time.time()<self.deathtime
-
+	
+	def can_fetch(self, url):
+		return self.robotparser.can_fetch(self.useragent, url)
+		
 class RobotCacheHandler(LimitedDict):
-	def __init__(self, mem_max, initialdata=None, lifetime=3600):
+	def __init__(self, mem_max, initialdata=None, lifetime=3600, useragent="*"):
 		"""
 			@brief				blocking, blocking and vblocing io mustbe changed
 			@param liftime		- lifetime( second ) of a robot object before updating
@@ -96,7 +100,7 @@ class RobotCacheHandler(LimitedDict):
 		"""
 		LimitedDict.__init__(self, mem_max, initialdata)
 		self.lifetime 		= lifetime
-
+		self.useragent		= useragent
 	
 	def add(self, key):
 		"""
@@ -105,15 +109,14 @@ class RobotCacheHandler(LimitedDict):
 		if (key in self) and self[key].is_alive() :
 			return ""
 				
-		robot = Robot( RobotFileParser(), key, time.time() + self.lifetime )
+		robot = Robot( RobotFileParser(), key, time.time() + self.lifetime, self.useragent )
+		robot.update()
 		LimitedDict.__setitem__(self, key, robot )
-		return 
+		return robot.robotparser.sitemap
 		
 
 	def __getitem__( self, key ):
-		if (key in self) and self[key].is_alive() :
-			return LimitedDict.__getitem__(self, key)
-		else:
-			robot = LimitedDict.__getitem__(self, key)
+		robot = LimitedDict.__getitem__(self, key)
+		if not robot.is_alive() :
 			robot.update()
-			return robot
+		return robot

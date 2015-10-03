@@ -1,17 +1,16 @@
 from urllib.parse import urlparse, urljoin
 from hashlib import md5
 from .AVL import *
+import time
 
-MAX = 1<<384
-def Phi( urlRecord ): # 384bits
-	urlObj = urlparse( urlRecord.url )
+LIFETIME		=	2#s report liftime x2 slower than sending
 
-	scheme_md5 = md5(urlObj.scheme).hexdigest()
-	netloc_md5 = md5(urlObj.netloc).hexdigest()
-	url_md5	   = md5(urlRecord.url).hexdigest()
+MAX = int("f"*64, base=16)
+def Phi( task ): # 384bits
+	netloc_md5 = int( md5(task.netloc.encode('utf-8')).hexdigest(), base=16)
+	url_md5	   = int( md5(task.url.encode('utf-8')).hexdigest(), base=16)
 	
-	return scheme_md5+netloc_md5+url_md5 # lexicographorder first on schem then netloc and finally url
-
+	return netloc_md5*(10**32)+url_md5 # lexicographorder first on schem then netloc and finally url
 
 class NetareaTree( AVL ):
 	def __init__(self):
@@ -22,7 +21,7 @@ class NetareaTree( AVL ):
 			 @return the left closest area 
 		"""
 		if self.root == None:
-			raise EmptyAVL
+			raise Exception("EmptyAVL")
 		
 		return self.root.search( netarea )
 	
@@ -39,7 +38,7 @@ class NetareaTree( AVL ):
 		self.add( NetareaNode(key, item) )
 		
 class NetareaNode(AVLNode):
-	def __init__(self, netarea="", value=None, left=None, right=None):
+	def __init__(self, netarea=0, value=None, left=None, right=None):
 		AVLNode.__init__(self,netarea, value, left, right)
 		
 	def search(self, netarea):
@@ -78,48 +77,53 @@ class NetareaNode(AVLNode):
 
 class Report:
 	def __init__(self, used_ram, max_ram):
-		self.used_ram = wheight
-		self.max_ram = maxWeight
+		self.used_ram = used_ram
+		self.max_ram = max_ram
+		
+		self.expires	= time.time() + LIFETIME
 	
 	def load(self):
-		return float(self.max_ram-load_ram)/self.max_ram
+		return float(self.used_ram)/self.max_ram
 		
 	def is_overload(self):
 		return self.load()>0.95
+		
+	def is_expired(self):
+		return time.time() > self.expires
 
 class NetareaReport(Report):
 	"""
 		@param netarea uniqu id (str)
 		@param weight = plus c'est grarnad plus la partition est importante : servira à l'allouer à un Netareamanger robuste load balancibg
 	"""
-	def __init__(self, netarea, used_ram, max_ram, int_next_netarea=MAX):
+	def __init__(self, netarea, used_ram, max_ram, next_netarea=MAX):
 		#netarea is an hash ie heaxdigit str
 		self.netarea = netarea # [netarea,next_netarea[
-		self.next_netarea = hex( int_next_netarea )
-		self.int_netarea = int(netarea,16)
-		self.int_next_netarea = int_next_netarea
-		self.used_ram = used_ram
-		self.max_ram = max_ram
-
+		self.next_netarea = next_netarea
+		Report.__init__(self, used_ram, max_ram)
+		
 	def split(self):
-		mid = floor( (int_next_netarea-int_netarea) / 2.0 )
+		mid = floor( (next_netarea-netarea) / 2.0 )
 		
 		self.used_ram = 0
-		self.next_netarea = hex( mid) 
-		self.int_next_netarea = mid
+		self.next_netarea = mid
 		
-		return NetareaReport( hex(mid), 0, self.max_ram, int_next_netarea )
+		return NetareaReport(mid, 0, self.max_ram, next_netarea )
 
 class MasterReport(Report):
-	def init(self, ip, num_core, max_ram, maxNumNetareas, netarea_reports):
-		self.ip				= ip
+	def __init__(self, id, num_core, max_ram, maxNumNetareas, netarea_reports):
+		self.id				= id
 		self.num_core		= num_core
-		self.max_ram		= max_ram
 		self.maxNumNetareas	= maxNumNetareas
 		self.netarea_reports= netarea_reports
+		
+		Report.__init__(self, 0, max_ram)
 	
 	def is_overload(self):
 		return self.maxNumNetareas <= len( self.netarea_reports)
 	
 	def allocate(self, net):
 		self.netarea_reports.append( net )
+
+	def __str__(self):
+		return "id = "+str(self.id)+"\n"+"num_core = "+str(self.num_core)+"\nnetareas = "+str(len(self.netarea_reports))+"/"+str(self.maxNumNetareas)
