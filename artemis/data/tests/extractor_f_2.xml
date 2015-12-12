@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://www.ovh.com/fr/sitemap-fr.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.ovh.com/ca/fr/sitemap-cafr.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.ovh.com/ca/en/sitemap-caen.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.ovh.com/us/es/sitemap-uses.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.ovh.com/us/sitemap-us.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.ovh.com/ma/sitemap-ma.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.ovh.com/tn/sitemap-tn.xml</loc>
+  </sitemap>
+</sitemapindex>
+

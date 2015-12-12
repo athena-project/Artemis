@@ -1,3 +1,12 @@
+class EmptyAVL( Exception ):
+	pass
+
+class AlreadyExists(Exception):
+	def __init__(self, value):
+		self.value = value
+	def __str__(self):
+		return repr(self.value)
+
 class AVL:
 	def __init__(self):
 		self.number = 0
@@ -29,11 +38,19 @@ class AVL:
 		return self.root.get(key)
 		
 	def __str__(self):
-		return "Nodes : "+str(self.number)+"\n"+self.root.str(0)
+		if self.root:
+			return "Nodes : "+str(self.number)+"\n"+self.root.str(0)
+		else:
+			return "Empty AVL"
 		
 	def update(self, avlB):
 		self.number = avlB.number
 		self.root 	= avlB.root
+			
+	def suppr(self, key):
+		self.root.suppr( key)
+		self.number-=1
+	
 class AVLNode:#see Yves le maire exo6.3 AVL
 	def __init__(self, key="", value=None, left=None, right=None):
 		self.key = key
@@ -44,8 +61,10 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 		self.update()
 		
 	def update(self):
-		self.d		= (-1 if self.right ==None else self.right.hight) - (-1 if self.left ==None else self.left.hight)  #desequilibre
-		self.hight=max( (-1 if self.right ==None else self.right.hight), (-1 if self.left ==None else self.left.hight) )+1
+		self.d	= (-1 if self.right ==None else self.right.hight) 
+		self.d -= (-1 if self.left ==None else self.left.hight)  #desequilibre
+		self.hight= max( (-1 if self.right ==None else self.right.hight), 
+			(-1 if self.left ==None else self.left.hight) )+1
 
 	def __gt__(self, node):
 		return self.key > node.key
@@ -68,7 +87,6 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 	def rotate_right(self):
 		if self.left == None:
 			return 
-			
 			
 		left_node = self.left.left
 		right_node= AVLNode( self.key, self.value, self.left.right, self.right)
@@ -153,7 +171,7 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 				self.right.add( new_node )
 		self.update()
 		self.balance()
-	
+
 	def get(self, key):
 		if self.key == key :
 			return self.value
@@ -164,15 +182,15 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 		
 	def suppr_min(self):
 		if self.left == None:
-			right=self.right
+			right = self.right
 			return (self, right)
 		else :
-			node, right_node = self.left.suppr_min()
+			node, right_node = self.left.suppr_min() #node est le plus petit
 			
 			self.left = right_node
 			self.update()
 			self.balance()
-			return node
+			return node, None
 			
 	def suppr(self, key):
 		if key<self.key:
@@ -187,40 +205,9 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 				self.right = self.left.right
 				del self.left
 			else:
-				node = self.right.suppr_min()
-				self.key= node.key
+				node, nothing = self.right.suppr_min()
+				print(node)
+				self.key = node.key
 				self.value = node.value
 		self.update()
 		self.balance()		
-
-#import unittest
-#from random	import randint
-
-#class TestNet(unittest.TestCase):
-	#def test_avl_insertion(self):
-		#tree = AVL()
-		#d={}
-		#d["0"]=0
-		#tree["0"]=0
-		#for k in range(10000):
-			#tmp = str(randint(0, 1<<30))
-			#if tmp not in d:
-				#tree[tmp]=1 
-				#d[tmp]=True
-				
-			#self.assertTrue(  tree.root.d<3 , str(tree.root.d)+"  "+str(k) )
-	#def test_avl_get(self):
-		#tree = AVL()
-		#d={}
-		#d["0"]=0
-		#tree["0"]=1
-		#for k in range(10000):
-			#tmp = str(randint(0, 1<<30))
-			#if tmp not in d:
-				#tree[tmp]=1 
-				#d[tmp]=True
-				
-			#self.assertTrue(  tree[tmp]==1 , str(k)+"  "+str(tree[tmp]) )
-#if __name__ == '__main__':
-    #unittest.main()
-

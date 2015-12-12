@@ -1,116 +1,95 @@
-import copy
-import shutil
-
-from email.utils import formatdate
-
-import time
-import hashlib
-
-from collections import deque
 from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
 
-from .Task import TASK_WEB_STATIC_TORRENT, TASK_WEB_STATIC, TASK_WEB_STATIC_TOR, Task
+from .Task import Task, TaskNature, AVERAGE_TASK_SIZE
 from copy import copy, deepcopy
-from .handlers.HandlerRules import HandlerRules
+from .handlers.HandlerRules import getHandler
+from .AVL import EmptyAVL
 
 import mimetypes
+import sys, traceback
 
-from .network.AMQPConsumer import AMQPConsumer
-from .network.AMQPProducer import AMQPProducer
+#for out_interface debug.....
+#from .network.AMQPConsumer import AMQPConsumer
+#from .network.AMQPProducer import AMQPProducer 
 
 import transmissionrpc 
 
 import tempfile
 import logging
-from time import sleep
+from time import sleep, time
 from .Netarea import Phi, NetareaTree #fonction utilisé pour associé une url à une netarea  url -> netarea key
-from .LimitedCollections import LimitedDeque, LimitedDict
+from .Cache import  ARCCache, EmptyItem
+from collections import deque, defaultdict
 import stem.process #tor
 from stem.util import term
-import artemis.db.SQLFactory as SQLFactory
 from .Utility import serialize, unserialize
-from .Forms import SQLFormManager, Form
-from .accreditation.AccreditationCacheHandler import AccreditationCacheHandler
+from .accreditation.AccreditationCache import AccreditationCache
 from .handlers.HTTPDefaultHandler import HTTPDefaultHandler
 from .handlers.FTPDefaultHandler import FTPDefaultHandler
-from .RessourceFactory	 import RessourceFactory
-from .Monitor import HEADER_SENDER_STOP, HEADER_SENDER_START, HEADER_SENDER_DEFAULT
-import artemis.pyHermes as pyHermes
+from .RessourceFactory	 import build
+
+from .network.TcpServer import T_TcpServer, P_TcpServer, TcpServer
+from .network.TcpClient import TcpClient
+from .network.Msg		import MsgType, Msg
+from .network.Reports	import SlaveReport, MonitorReport
 
 
+#logging.getLogger('transmissionrpc').setLevel(logging.DEBUG)
 
-NUM_CLASS_TYPES = 6
-RESSOURCE_BUNDLE_LEN = 10
-SOCKS_PORT			= 7000 #tor
+NUM_CLASS_TYPES 		= 6
+RESSOURCE_BUNDLE_LEN 	= 10
+SOCKS_PORT				= 7000 #tor
 
-TASK_BUNDLE_LEN = 10 #task
+TASK_BUNDLE_LEN = 20 #task
 
+#metric, local à un processus accessoirement
+tasks_processed = 0
+start_time = 0
 
 mimetypes.init()
 
-class In_Interface(AMQPConsumer, Thread ):
-	def __init__(self, tasks, maxTasks, Exit) :
-		"""
-			@param tasks			incomming Task type
-			@param maxTasks		describe the number of tasks in the  buffer
-		"""		
-		Thread.__init__(self)
-		AMQPConsumer.__init__(self, "artemis_master_out")
-		
-		self.maxTasks		= maxTasks
-		self.tasks			= tasks
-		self.Exit			= Exit
-		
-		logging.info("In_Interface initialized")
-		
-	def run(self): 
-		logging.info("In_Interface started")
-		self.consume()
-		self.channel.basic_consume(callback=self.proccess, queue=self.key)
-		
-		while not self.Exit.is_set():
-			while len(self.tasks)<self.maxTasks :
-				self.channel.wait()
-			sleep(1)
-		
-	def proccess(self, msg):
-		#print( "Tasks received",len( unserialize(msg.body) ))
-		self.tasks.extend( unserialize( msg.body ) )
-		AMQPConsumer.process( self, msg)
-		
-class In_Torrent_Interface(AMQPConsumer, Thread ):
-	def __init__(self, torrents, maxTorrents, Exit) :
-		"""
-			@param torrents			incomming Torrents 
-			@param maxTorrents		describe the number of torrents in the  buffer
-		"""		
-		Thread.__init__(self)
-		AMQPConsumer.__init__(self, "artemis_master_out_torrent")
-		
-		self.maxTorrents	= maxTorrents
-		self.torrents		= torrents
-		self.Exit			= Exit
-		
-		logging.info("In_Torrent_Interface initialized")
-	def run(self):
-		logging.info("In_Torrent_Interface started")
-
-		self.channel.basic_consume(callback=self.proccess, queue=self.key)
-		
-		while not self.Exit.is_set():
-			while len(self.torrents)<self.maxTorrents :
-				self.channel.wait()
-			sleep(1)
-		
-	def proccess(self, msg):
-		#print( "Torrents received",len( unserialize(msg.body) ))
-
-		self.torrents.extend( unserialize( msg.body ) )
-		AMQPConsumer.process( self, msg)
+class VSlaveHearbeat( Thread ):
+	def __init__(self, monitors, report, tasks, torrents, Exit, 
+		monitors_lock):
+		"""	
+			@monitors
+			@report and init report with constant, will be update durinf execution
 			
+		"""
+		Thread.__init__(self)
+		self.client 		= TcpClient()
+		
+		self.monitors		= monitors
+		self.report			= report
+		self.tasks			= tasks
+		self.torrents		= torrents
+		
+		self.Exit 			= Exit
+		self.monitors_lock	= monitors_lock
+		
+		logging.info("VSlaveHearbeat init")
+
+	def update_report(self):
+		self.report.used_ram = len(self.tasks)+len(self.torrents)
+		self.report.used_ram *= AVERAGE_TASK_SIZE
+
+	def run(self):
+		while not self.Exit.is_set():
+			self.update_report()
+			
+			with self.monitors_lock:
+				for (host, port) in self.monitors:
+					self.report.reset()
+					
+					self.client.send( 
+						Msg(MsgType.ANNOUNCE_SLAVE , self.report), 
+						host, port )
+			sleep(1)
+		
 class Sender( Thread ): 
-	def __init__(self, newTasks, doneTasks, netTree, domainRules, protocolRules, originRules, delay, Exit):
+	def __init__(self, newTasks, doneTasks, netTree, domainRules,
+		protocolRules, originRules, delay, Exit, netTree_lock):
 		"""
 			@param newTasks			- deque which contains the task collected by the crawlers
 			@param netTree			- AVL which contains netaarea active on the network
@@ -123,13 +102,7 @@ class Sender( Thread ):
 			@brief Send the collected urls to the master
 		"""
 		Thread.__init__(self)
-		self.new_producer			= AMQPProducer("artemis_master_in")
-		self.new_producer.channel.exchange_declare(exchange='artemis_master_in_direct', type='direct')
-		self.new_producer.channel.queue_declare("artemis_master_in", durable=False)
-
-		self.done_producer			= AMQPProducer("artemis_master_done")
-		self.done_producer.channel.exchange_declare(exchange='artemis_master_done_direct', type='direct')
-		self.done_producer.channel.queue_declare("artemis_master_done", durable=False)
+		self.client 		= TcpClient()
 
 		self.newTasks		= newTasks
 		self.doneTasks		= doneTasks
@@ -140,12 +113,12 @@ class Sender( Thread ):
 		self.originRules	= originRules
 		
 		self.delay			= delay
-		self.alreadySent	= LimitedDict( 1<<22 ) #voir la taille
+		self.alreadySent	= ARCCache( 10**4 ) 
 		self.Exit			= Exit
+		self.netTree_lock	= netTree_lock
 		
 		logging.info("Sender initialized")
 
-	
 	def is_valid(self, task):
 		"""
 			@brief			- it will chek 
@@ -155,21 +128,54 @@ class Sender( Thread ):
 				
 		"""
 		url = task.url
-		if( url in self.alreadySent and  not self.alreadySent[url].is_expediable(self.delay) ):
+		
+		record = self.alreadySent[url]
+		if( not isinstance(record, EmptyItem)
+		and not record.is_expediable(self.delay) ):
 			return False
 		
-		#if  (task.origin not in self.originRules and not self.originRules["*"])  or  (task.origin in self.originRules and not self.originRules[task.origin]):
+		#if not self.originRules[task.origin]):
 				#return False
 
-		if (task.scheme not in self.protocolRules and not self.protocolRules["*"]) or  (task.scheme in self.protocolRules and not self.protocolRules[task.scheme]):
+		if not self.protocolRules[task.scheme] :
 			  return False
 		
-		if (task.netloc not in self.domainRules and not self.domainRules["*"])  or  (task.netloc in self.domainRules and not self.domainRules[task.netloc]):
+		if not self.domainRules[task.netloc] :
 			  return False
 			  
 		self.alreadySent[url]=task
 		return True
 		
+		
+	def process_list(self, tasks):
+		buffers = defaultdict(list)
+
+		while tasks:
+			task 	= tasks.pop()
+			with self.netTree_lock:
+				key		= self.netTree.search( Phi(task) ).netarea
+				host	= self.netTree[key].host
+				port	= self.netTree[key].port
+			
+			buffers[key].append( task )
+			
+			if len( buffers[key] ) > TASK_BUNDLE_LEN :
+				self.client.send(
+					Msg(MsgType.MASTER_IN_TASKS, buffers[key]), 
+					host, port)
+				buffers[key] = []
+		
+		#empty the buffers
+		for key in buffers:
+			if buffers[key]: #len(buffers[key] <= TASK_BUNDLE_LEN
+				with self.netTree_lock:
+					host	= self.netTree[key].host
+					port	= self.netTree[key].port
+				self.client.send( 
+					Msg(MsgType.MASTER_IN_TASKS, buffers[key]), 
+					host, port)
+				buffers[key] = []
+				
 	def process(self):
 		new_tasks=[] #only valid and fresh urls
 		
@@ -177,64 +183,34 @@ class Sender( Thread ):
 			task = self.newTasks.popleft()
 			if self.is_valid( task ):
 				new_tasks.append( task )
-		
-		buffers={}
-		while new_tasks:
-			task 	= new_tasks.pop()
-			key	= self.netTree.search( Phi(task) ).netarea
-			if key not in buffers:
-				buffers[key]=[]
 			
-			buffers[key].append( task )
-			
-			if len( buffers[key] ) > TASK_BUNDLE_LEN :
-				self.new_producer.add_task( serialize( buffers[key] ), exchange="artemis_master_in_direct", routing_key=str(key)  )
-				buffers[key] = []
-		
-		#empty the buffers
-		for key in buffers:
-			if buffers[key]: #len(buffers[key] <= TASK_BUNDLE_LEN
-				self.new_producer.add_task( serialize( buffers[key] ), exchange="artemis_master_in_direct", routing_key=str(key)  )
-				buffers[key] = []
-				
-		buffers={}		
-		while self.doneTasks :
-			task = self.doneTasks.popleft()
-			key	= self.netTree.search( Phi(task) ).netarea
-			if key not in buffers:
-				buffers[key]=[]
-			
-			buffers[key].append( task )
-			
-			if len( buffers[key] ) > TASK_BUNDLE_LEN :
-				self.new_producer.add_task( serialize(buffers[key]), exchange="artemis_master_done_direct", routing_key=str(key)  )
-				buffers[key]={}
-		
-		#empty the buffers
-		for key in buffers:
-			if buffers[key]: #len(buffers[key] <= TASK_BUNDLE_LEN
-				self.new_producer.add_task( serialize( buffers[key] ), exchange="artemis_master_done_direct", routing_key=str(key)  )
-				buffers[key] = []
+		self.process_list( new_tasks )
+		self.process_list( self.doneTasks )
 			 	
 	def run(self):
 		logging.info("Sender started")
 
 		while not self.Exit.is_set():
-			self.process()
-			time.sleep(1)
+			try:
+				self.process()
+			except EmptyAVL:
+				print("EmptyAVL")
+				pass
+			sleep(1)
 		
 		self.process()
 		logging.info("Sender stopped")
 			
 class CrawlerOverseer( Thread ):
-	def __init__(self, useragent, maxCrawlers,  tasks, doneTasks, newTasks, newForms, contentTypes, delay, unorderedRessource, Exit):
+	def __init__(self, useragent, maxCrawlers,  tasks, doneTasks, 
+		newTasks, contentTypes, delay, ressources, Exit):
 		"""
 			@param useragent			- 
 			@param maxCrawlers			- maximun number of crawlers
 			@param tasks					- deque which contains the tasks received from the master
 			@param contentTypes			- dict of allowed content type (in fact allowed rType cf.contentTypeRules.py)
 			@param delay				- period between two crawl of the same page
-			@param unorderedRessource	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
+			@param ressources	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
 			@param newTasks				- deque which contains the urls collected by the crawlers
 			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
 			@brief Creates and monitors the crawlers
@@ -248,40 +224,28 @@ class CrawlerOverseer( Thread ):
 		
 		self.tasks				= tasks
 		self.newTasks			= newTasks
-		self.newForms			= newForms
 		self.doneTasks			= doneTasks
 		self.contentTypes		= contentTypes
 		self.delay				= delay
 
-		self.unorderedRessource	= unorderedRessource
+		self.ressources			= ressources
 		self.Exit				= Exit
-		
-		#self.initTor()
 		
 		logging.info("CrawlerOverseer initialized")
 		
-	def initTor(self):
-		
-		self.tor_process = stem.process.launch_tor_with_config(
-		#tor_cmd="extras/Tor/tor",
-		config = {'SocksPort': str(SOCKS_PORT)},
-		init_msg_handler = lambda line : logging.info( term.format(line, term.Color.BLUE) )
-		)
-	
 	def terminate(self):		
 		while len(self.crawlers)>0:
 			for i in len(self.crawlers):
 				if not self.crawlers[i].is_alive():
 					del self.crawlers[i]
-		sleep(0.1)
 			
-		self.tor_process.kill()
 		logging.info("CrawlerOverseer stopped")
 	
 	def process(self):
 		for i in range(self.maxCrawlers):
-			w = Crawler( self.useragent, self.tasks, self.doneTasks, self.newTasks, self.newForms,
-				deepcopy(self.contentTypes), self.delay, self.unorderedRessource, self.Exit )
+			w = Crawler( self.useragent, self.tasks, self.doneTasks, 
+				self.newTasks, deepcopy(self.contentTypes), self.delay, 
+				self.ressources, self.Exit )
 			self.crawlers.append( w )
 			w.start()
 		
@@ -290,18 +254,19 @@ class CrawlerOverseer( Thread ):
 
 		self.process()
 		while not self.Exit.is_set(): # pas encore de role definit en attente despécification utltérieures
-			time.sleep( 1 ) 
+			sleep( 1 ) 
 			
 		self.terminate()
 		
 class Crawler( Thread ): 
-	def __init__(self, useragent,  tasks, doneTasks, newTasks, newForms, contentTypes, delay, unorderedRessources, Exit):
+	def __init__(self, useragent,  tasks, doneTasks, newTasks, 
+		contentTypes, delay, ressources, Exit):
 		"""
 			@param tasks					- deque which contains the urls received from the master
 			@param newTasks				- deque which contains the urls collected by the crawlers
 			@param contentTypes			- dict of allowed content type (in fact allowed rType cf.contentTypeRules.py)
 			@param delay				- period between two crawl of the same page
-			@param unorderedRessource	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
+			@param ressources	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
 			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
 			@brief Will get ressources from the web, and will add data to waitingRessources and collected urls to newTasks
 		"""
@@ -310,52 +275,49 @@ class Crawler( Thread ):
 		
 		self.tasks				= tasks
 		self.newTasks			= newTasks
-		self.newForms			= newForms
 		self.doneTasks			= doneTasks
 		self.contentTypes		= contentTypes 
 		self.delay				= delay
 				
-		self.handlerRules		= copy( HandlerRules )
-		self.accreditationCacheHandler	= AccreditationCacheHandler(4194304) #4MB
+		self.accreditationCache	= AccreditationCache(4194304, "accreditation.sql") #4MB
 			
-		self.unorderedRessources= unorderedRessources
+		self.ressources			= ressources
 		self.Exit 				= Exit
 				
-		self.contentTypesHeader = "*/*;"
+		self.contentTypesHeader = "*/*"
 		if "*" in contentTypes and  (not self.contentTypes["*"]) :
-			self.contentTypesHeader =""
-			for key,flag in self.contentTypes.items():
-				if key != "*" and flag:
-					self.contentTypesHeader+=key+"; ,"
-		
+			self.contentTypesHeader = ','.join([ 
+				key 
+				for key,flag in self.contentTypes.items() 
+				if key != "*" and flag 
+			])
 		logging.info("Crawler initialized")
 
-		
 	def process(self):
 		try:
 			while True:	
-				task = self.tasks.popleft()
-				#print("Crawler : ", task.url)
+				task = self.tasks.popleft() 
 				self.dispatch( task )
-		except Exception as e:
-			print(e)
-			logging.debug( e )
+		except Exception as e :
+			logging.debug( "%s %s" % (
+				traceback.extract_tb(sys.exc_info()[2]), str(e)))
+			sleep(0.1)
 	
 	def run(self):
 		logging.info("Crawler started")
 
 		while not self.Exit.is_set():
 			self.process()
-			time.sleep(1)
+			sleep(1)
 		self.process()	
 			
 	def dispatch(self, task):
 		"""
 			@param url	-
 			@brief selects the right function to  handle the protocl corresponding to the current url( http, ftp etc..)
-		"""
-		#print(task.url)
-		if task.nature == TASK_WEB_STATIC or  task.nature == TASK_WEB_STATIC_TOR:
+		"""	
+		if( task.nature == TaskNature.web_static 
+		or task.nature == TaskNature.web_static_tor):
 			if( task.scheme == "http" or task.scheme == "https"):
 				self.http( task )
 			elif( task.scheme == "ftp" or task.scheme == "ftps"):
@@ -368,75 +330,69 @@ class Crawler( Thread ):
 		}
 	
 	def ftp(self, task):
-		print("ftp : ", task.url, "  nature = ",task.nature)
-
-		if task.netloc not in self.handlerRules["ftp"]:
-			handler = FTPDefaultHandler( self.accreditationCacheHandler)
-		else:
-			handler = self.handlerRules["ftp"][ task.netloc ]( self.accreditationCacheHandler)#ftp/ftps -> same 
-		
+		handler = getHandler( task )( self.accreditationCache )
 		newTasks, tmpFile = handler.execute( task )
 		
 		if task.is_dir:
 			contentType, encoding = "inode/directory", None
 		else:
-			contentType, encoding = mimetypes.guess_type(task.url, strict=False) #encoding often None
-		#print("contentType ",contentType)	
-		ressource, tasks, forms, children	= RessourceFactory.build(tmpFile, task, contentType, self.contentTypes, self.useragent)
+			contentType, encoding = mimetypes.guess_type(task.url, 
+				strict=False) #encoding often None
+		
+		ressource, tasks		= build(
+			tmpFile, 
+			task, 
+			contentType if contentType else "application/octet-stream", 
+			self.contentTypes, 
+			self.useragent)
+
 		if ressource :  
 			self.newTasks.extend( tasks )
-			self.newForms.extend( forms )
-			self.unorderedRessources[ ressource.getClass_type() ].append( (task, ressource, tmpFile) )
+			self.ressources.append( ressource )
 			
-			for key, r in children.items():
-				self.unorderedRessources[ key ].append( r )
-			
-		task.lastvisited 	= time.time()
+		task.lastvisited 	= time()
 		task.lastcontrolled	= task.lastvisited
-		#print( newTasks)
+		
 		self.newTasks.extend( newTasks )
 		self.doneTasks.append( task )
-		
+				
 	def http( self, task ): 
 		"""
 			@param task		-	
 			@param urlObj	- ParseResult (see urllib.parse), which represents the current url
 			@brief connects to  the remote ressource and get it
 		"""
-		#print("http : ", task.url, "  nature = ",task.nature)
 		#proxies = (self.getTorProxies() if task.nature	== TASK_WEB_STATIC_TOR else None), not until requests support sock5
 		proxies=None
 		
-		if task.netloc not in self.handlerRules["http"]:
-			handler = HTTPDefaultHandler(self.useragent, self.contentTypesHeader, self.accreditationCacheHandler, proxies, SOCKS_PORT)
-		else:
-			handler = self.handlerRules["http"][ task.netloc ](self.useragent, self.contentTypesHeader, self.accreditationCacheHandler, proxies, SOCKS_PORT)#http/https -> same 
+		handler = getHandler(task)( self.useragent, 
+			self.contentTypesHeader, self.accreditationCache, 
+			proxies, SOCKS_PORT)
 		
 		contentType, tmpFile, redirectionTasks = handler.execute( task )
 		
-		ressource, tasks, forms, children	= RessourceFactory.build(tmpFile, task, contentType, self.contentTypes, self.useragent)
+		ressource, tasks	= build(tmpFile,
+			task, 
+			contentType, 
+			self.contentTypes, 
+			self.useragent)
 
 		if ressource :  
-			#print("tasks", len(tasks))
-			#print("pre-forms: ", len(forms))
 			self.newTasks.extend( tasks )
-			self.newForms.extend( forms )
-			self.unorderedRessources[ ressource.getClass_type() ].append( (task, ressource, tmpFile) )
-			
-			for key, r in children.items():
-				self.unorderedRessources[ key ].append( r )
+			self.ressources.append( ressource )
 		
-		task.lastvisited 	= time.time()
+		task.lastvisited 	= time()
 		task.lastcontrolled	= task.lastvisited
 		self.doneTasks.append( task )
 		self.newTasks.extend( redirectionTasks )
-		
+	
 class TorrentHandler( Thread ):
-	def __init__(self, torrents, contentTypes, maxActiveTorrents, useragent, doneTasks, newTasks, unorderedRessource, Exit):
+	def __init__(self, torrents, contentTypes, maxActiveTorrents, 
+		useragent, doneTasks, newTasks, ressources, Exit):
 		"""
 			@param urls					- deque which contains the urls received from the master
 			@param newTasks				- deque which contains the urls collected by the crawlers
-			@param unorderedRessource	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
+			@param ressources	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
 			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
 			@brief A torrent must not be recrawl ?
 		"""
@@ -449,142 +405,92 @@ class TorrentHandler( Thread ):
 		
 		self.doneTasks			= doneTasks
 		self.newTasks			= newTasks			
-		self.unorderedRessource	= unorderedRessource
+		self.ressources			= ressources
 		self.Exit 				= Exit
 		
 		self.client = transmissionrpc.Client('localhost', port=9091)
 		
-		self.activeTorrents = []
+		self.activeTorrents = {}
 		logging.info("TorrentHandler initialized")
 	
 	def add_torrent(self, task):
-		tmpDir = tempfile.TemporaryDirectory()
-		torrent_id = (self.client.add_torrent(task.url, download_dir=tmpDir.name)).id
-		print("Adding torrent", task.url)
-		print("Torrent_id", torrent_id)
-		self.activeTorrents.append( (task, torrent_id, tmpDir) )
+		try:
+			tmpDir = tempfile.TemporaryDirectory()
+			torrent_id = (self.client.add_torrent(task.url, download_dir=tmpDir.name)).id
+			self.activeTorrents[torrent_id] = ( (task, tmpDir) )
+		except Exception as e:
+			logging.debug( "%s %s %s" % (
+				traceback.extract_tb(sys.exc_info()[2]), str(e), str(task)))
+			pass
+
 		
 	def run(self):
-		logging.info("TorrentHandler started")
-
 		while not self.Exit.is_set():
-			for (task, torrent_id, tmpDir) in self.activeTorrents:
-				torrent = self.client.get_torrent( torrent_id ) 
-				
-				print("Torrent active, ", task.url)
-				print("name: ", torrent.name, "  status: ", torrent.status, "  progress: ", torrent.progress)
-					
-				if torrent.progress == 100: #ie download finished
-					task.lastvisited 	= time.time()
+			for torrent_id, (task,  tmpDir) in list(self.activeTorrents.items()):
+				try:
+					torrent = self.client.get_torrent( torrent_id ) 
+				except Exception as e:
+					task.lastvisited 	= time()
 					task.lastcontrolled	= task.lastvisited
 					
-					ressource, tasks, forms, children			= RessourceFactory.build(tmpDir, task, "inode/directory", self.contentTypes, "torrent:"+self.useragent)
+					self.doneTasks.append( task )
+					
+					self.client.stop_torrent( torrent_id )
+					self.client.remove_torrent( torrent_id )
+					del self.activeTorrents[torrent_id]
+						
+					logging.debug( "%s %s %s" % (
+						traceback.extract_tb(sys.exc_info()[2]), 
+						str(e), str(task)))
+					
+				if torrent.progress == 100: #ie download finished
+					task.lastvisited 	= time()
+					task.lastcontrolled	= task.lastvisited
+					ressource, tasks = build(tmpDir,
+						task,
+						"inode/directory", 
+						self.contentTypes, 
+						task.url
+					)
 					
 					if ressource :
 						self.newTasks.extend( tasks )
-						self.unorderedRessource[ pyHermes.t_Directory ].appendleft( (task, ressource, tmpDir) )
-						
-						for key, r in children.items():
-							self.unorderedRessources[ key ].append( r )
-						
+						self.ressources.append( ressource )						
 					self.doneTasks.append( task )
 					
 					self.client.stop_torrent( torrent_id )
 					self.client.remove_torrent( torrent_id )
-					self.activeTorrents.remove( (task, torrent_id, tmpDir) ) 
-				
-				if torrent.status == "stopped":
-					task.lastvisited 	= time.time()
+					del self.activeTorrents[torrent_id]					
+					
+				elif torrent.status == "stopped":
+					task.lastvisited 	= time()
 					task.lastcontrolled	= task.lastvisited
 					
 					self.doneTasks.append( task )
 					
 					self.client.stop_torrent( torrent_id )
 					self.client.remove_torrent( torrent_id )
-					self.activeTorrents.remove( (task, torrent_id, tmpDir) ) 
-					
-			while len(self.activeTorrents) < self.maxActiveTorrents and  self.torrents:
+					del self.activeTorrents[torrent_id]
+		
+					logging.debug("torrent failed %s" % task)
+									
+			while( len(self.activeTorrents) < self.maxActiveTorrents 
+			and  self.torrents):
 				self.add_torrent( self.torrents.popleft() )
 			sleep(1)
-			
-class SQLHandler( Thread ):							
-	def __init__(self,  number, unorderedRessources, orderedRessources, newForms, Exit):	
-		"""
-			@param number				- insert and update pool size
-			@param unorderedRessources	- ressources collected waiting for saving in sql( dict : [rType : deque of ressources,..]
-			@param orderedRessources	- after saved in db
-			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
-			@brief handle sql requests, inserts newly collected ressources, and updates analysed ones
-		"""
-		
-		Thread.__init__(self); 
-		self.managers 			= {}
-		self.number				= number
-		self.unorderedRessources= unorderedRessources
-		self.orderedRessources	= orderedRessources
-		self.newForms			= newForms
-		self.Exit				= Exit
-
-		self.manager			= pyHermes.SQLRessourceManager()
-		self.formManager		= SQLFormManager( SQLFactory.getConn() )
-		
-		logging.info("SQLHandler initialized")
-					
-	def process(self):
-		for class_type in self.unorderedRessources:
-			while len( self.unorderedRessources[class_type])>self.number :
-				ressources 	= []
-				tmpfiles	= []
-				tasks 		= []
-
-				for k in range(self.number):
-					task, ressource, tmpFile = self.unorderedRessources[class_type].popleft()
-					ressources.append( ressource )
-					self.manager.add_acc(ressource)
-					tmpfiles.append( tmpFile )
-				#for r in ressources:
-					#print( r.getMetadata().get("contentType"), "       ",  r.getClass_type())
-					#print(len(ressources))
-				
-				i=self.manager.insert_with_acc(class_type)
-				n=len(ressources)
-				for k in range(n):
-					ressources[k].setId(i-n+k+1)
-				#print("End, insertion", i) 
-				self.orderedRessources.extend( [(i,j) for i,j in zip(ressources, tmpfiles)] )
-		print( "forms: ", len(self.newForms) )
-		while len( self.newForms)>self.number :
-			print("Forms insertion beginning")
-			forms 	= [ self.newForms.popleft() for k in range(self.number) ]
-			self.formManager.save(forms) 
-		
-	def run(self):
-		logging.info("SQLHandler started")
-
-		while not self.Exit.is_set():
-			try:
-				self.process()
-			except Exception as e:
-				logging.debug( e )	
-				
-			time.sleep( 1 )
-		
-		self.process()
-		self.number=1
-		self.process()
-		logging.info("SQLHandler stopped")
 
 class WorkerOverseer(Thread):
-	def __init__(self, maxWorkers, dfs_path, orderedRessources, savedRessources,  Exit):
+	def __init__(self, maxWorkers, dfs_path, ressources, savedRessources,
+		Exit):
 		"""
 			@param maxWorkers			- maximun number of workers handled by this overseer
-			@param orderedRessources	- ressources saved in db (see SQLHandler.preprocessing )
+			@param ressources			- coming from crawler
 			@param savedRessources		- ressources saved in DFS
 			@param Exit 				- stop condition( an event share with Slave, when Slave die it is set to true )
 		"""
 		Thread.__init__(self)
 
-		self.orderedRessources	= orderedRessources
+		self.ressources			= ressources
 		self.savedRessources	= savedRessources
 		self.maxWorkers			= maxWorkers
 		self.dfs_path			= dfs_path
@@ -606,7 +512,8 @@ class WorkerOverseer(Thread):
 		
 	def process(self):
 		for i in range(self.maxWorkers):
-			w = Worker( self.dfs_path, self.orderedRessources, self.savedRessources, self.Exit )
+			w = Worker( self.dfs_path, self.ressources, 
+				self.savedRessources, self.Exit )
 			self.workers.append( w )
 			w.start()
 	
@@ -615,7 +522,7 @@ class WorkerOverseer(Thread):
 
 		self.process()
 		while not self.Exit.is_set(): # pas encore de role definit en attente despécification utltérieures
-			time.sleep( 1 ) 
+			sleep( 1 ) 
 		
 		self.terminate()
 		
@@ -623,11 +530,11 @@ class Worker(Thread):
 	"""
 		@brief saves a ressource on DFS
 	"""
-	def __init__(self, dfs_path, orderedRessources, savedRessources,  Exit):
+	def __init__(self, dfs_path, ressources, savedRessources,  Exit):
 		Thread.__init__(self)
 		
 		self.dfs_path			= dfs_path
-		self.orderedRessources	= orderedRessources
+		self.ressources			= ressources
 		self.savedRessources	= savedRessources
 		self.Exit 				= Exit
 		
@@ -636,75 +543,70 @@ class Worker(Thread):
 		
 	def process(self):
 		try:
-			while True:
-				print("Working yeahhhhhhhhhh")
-				ressource, tmpFile = self.orderedRessources.popleft()
-				print("|",self.dfs_path)
-				ressource.save( self.dfs_path ) #build dir and metadata
-				location = ressource.location( self.dfs_path )
-				ressource.setFilename( location )
+			while self.ressources:
+				ressource = self.ressources.popleft()
+				ressource.save( self.dfs_path )
 				
-				if ressource.nature != pyHermes.t_Directory :
-					with open(location, 'wb') as newFile:
-						tmpFile.seek(0) 
-						shutil.copyfileobj(tmpFile, newFile, 32768)
-						tmpFile.close()
-				else:
-					not working
-					dans le cas d'un dossier temporaire si nom alors le save marche très bien si setDir avant
+				self.savedRessources.extend( ressource.rec_children() ) 
 				self.savedRessources.append( ressource )
+
+				global tasks_processed
+				tasks_processed += 1
 		except Exception as e:
-			logging.debug( e )
-			print(e)
+			logging.debug( "%s %s %s" % (
+				traceback.extract_tb(sys.exc_info()[2]), str(e),
+				str(ressource) ))
+			pass
 	
-	def run(self):
-		logging.info("Worker started")
-		
+	def run(self):		
 		while not self.Exit.is_set():
 			self.process()
-			time.sleep(1)
+			sleep(1)
 			
 		self.process()
 		
-class Out_Interface(AMQPProducer, Thread ):
+class Out_Interface( Thread ):
 	def __init__(self, savedRessources, Exit) :
 		Thread.__init__(self)
-		
-		AMQPProducer.__init__(self, "artemis_out")
-		self.channel.queue_declare(self.key, durable=False)
+		#not implented how and where the msg will be sent
+		#self.client	= TcpClient()
+		logging.warning("No out interface yet")
 		
 		self.savedRessources	= savedRessources
 		self.Exit				= Exit
 		
 		logging.info("Out_Interface initialized")
 		
-	def add_tasks(self):
-		while self.savedRessources:
+	def send(self):
+		while self.savedRessources:  
 			ressources = []
 			try:
 				for k in range( RESSOURCE_BUNDLE_LEN ) : 
-					ressources.append( self.savedRessources.popleft() )
+					ressouce = self.savedRessources.popleft() 
+					ressources.append( ressource._id )
 			except Exception :
 				pass
 			
 			if ressources:
-				self.add_task( Ressource.serialize(ressources) )
+				pass
+				#self.client.send( Msg( something ,ressources), somewhere, somewhere )
 				
 	def run(self):
 		logging.info("Out_Interface started")
 			
 		while not self.Exit.is_set():
-			self.add_tasks()
+			self.send()
 			sleep(1)
 		
-		#empty savedRessources
 		RESSOURCE_BUNDLE_LEN = 1
 		self.add_tasks()
 
-class Server(Process, AMQPConsumer):
-	def __init__(self, useragent, maxCrawlers, maxWorkers, delay, sqlNumber, dfs_path, contentTypes,
-				domainRules, protocolRules, originRules, maxTasksSize, maxTorrentsSize, maxNewTasksSize, maxDoneTasksSize,
-				maxNewFormsSize, maxUnorderedRessourcesSize, maxOrderedRessourcesSize, maxSavedRessourcesSize, maxActiveTorrents) :
+class VSlave(P_TcpServer):
+	def __init__(self, monitors, useragent, maxCrawlers, maxWorkers, 
+		delay, dfs_path, contentTypes, domainRules, 
+		protocolRules, originRules, maxTasks, maxTorrents, 
+		maxNewTasks, maxDoneTasks, maxRessources, 
+		maxSavedRessources, maxActiveTorrents) :
 		"""
 			@param useragent		- 
 			@param period			- period between to wake up
@@ -715,19 +617,18 @@ class Server(Process, AMQPConsumer):
 			@param sqlNumber		-
 			@brief
 		"""
-		Process.__init__(self)
-		AMQPConsumer.__init__(self)
-		self.channel.exchange_declare(exchange='artemis_monitor_slave_out', type='fanout')
-		self.channel.queue_bind(queue=self.key, exchange='artemis_monitor_slave_out')
+		P_TcpServer.__init__(self)
 		
-		
+		self.monitors			= {}
+		for host, port in monitors:
+			mon	= MonitorReport(host, port)
+			self.monitors[  (mon.host, mon.port) ] = mon
 		self.useragent			= useragent
 		
 		self.maxCrawlers		= maxCrawlers
 		self.maxWorkers 		= maxWorkers
 		
 		self.delay				= delay
-		self.sqlNumber			= sqlNumber
 		self.dfs_path			= dfs_path
 		
 		self.netTree			= NetareaTree()
@@ -738,146 +639,193 @@ class Server(Process, AMQPConsumer):
 		
 		self.maxActiveTorrents	= maxActiveTorrents
 		
-		self.tasks				= LimitedDeque( maxTasksSize )
-		self.torrents			= LimitedDeque( maxTorrentsSize )
-		self.maxTasks			= int(maxTasksSize / 2048) # assuming that an url len is less than 2048
-		self.maxTorrents		= int(maxTasksSize / 4096) # assuming that an url len is less than 2048
-		self.newTasks			= LimitedDeque( maxNewTasksSize )
-		self.doneTasks			= LimitedDeque( maxDoneTasksSize )
-		self.newForms			= LimitedDeque( maxNewFormsSize )
-		self.unorderedRessources= {}
-		self.orderedRessources	= LimitedDeque( maxOrderedRessourcesSize )
-		self.savedRessources	= LimitedDeque( maxSavedRessourcesSize )
+		self.maxTasks		= maxTasks
+		self.maxTorrents	= maxTorrents
+		
+		
+		self.tasks				= deque( maxlen=maxTasks )
+		self.torrents			= deque( maxlen=maxTorrents )
+		self.maxTasks			= int(maxTasks / 2048) # assuming that an url len is less than 2048
+		self.maxTorrents		= int(maxTasks / 4096) # assuming that an url len is less than 2048
+		self.newTasks			= deque( maxlen=maxNewTasks )
+		self.doneTasks			= deque( maxlen=maxDoneTasks )
+		self.ressources			= deque( maxlen=maxRessources )
+		self.savedRessources	= deque( maxlen=maxSavedRessources )
 	
 		
 
-		self.In_Interface_Exit 				= Event()
+		self.VSlaveHearbeat_Exit 			= Event()
 		self.In_Torrent_Interface_Exit 		= Event()
 		self.Sender_Exit 					= Event()
 		self.CrawlerOverseer_Exit 			= Event()
 		self.TorrentHandler_Exit 			= Event()
-		self.SQLHandler_Exit 				= Event()
 		self.WorkerOverseer_Exit 			= Event()
 		self.Out_Interface_Exit				= Event()
 		
-		for key in range( NUM_CLASS_TYPES ):
-			self.unorderedRessources[key]	= LimitedDeque( maxUnorderedRessourcesSize / NUM_CLASS_TYPES )
-	
+		self.monitors_lock					= RLock()
+		self.netTree_lock					= RLock()
+		
 		self.running		= False # True when netTree received
 		
+		self.client 		= TcpClient()
+		self.vSlaveHeartbeat	= VSlaveHearbeat( self.monitors, 
+			SlaveReport(self.get_host(), self.port, 0, 
+				self.maxTasks+self.maxTorrents),
+			self.tasks, self.torrents, self.VSlaveHearbeat_Exit, 
+				self.monitors_lock )
+		self.vSlaveHeartbeat.start()
+
 		logging.info("Server initialized")
 
 	def stop_sender(self):
 		self.Sender_Exit.set()
 		while self.sender.is_alive():
-			time.sleep(1)
+			sleep(1)
 			
 	def start_sender(self):
-		self.sender	= Sender( self.newTasks, self.doneTasks, self.netTree, self.domainRules, self.protocolRules, self.originRules, 
-			self.delay, self.Sender_Exit)
+		self.sender	= Sender( self.newTasks, 
+			self.doneTasks, 
+			self.netTree, 
+			self.domainRules, 
+			self.protocolRules, 
+			self.originRules, 
+			self.delay, 
+			self.Sender_Exit,
+			self.netTree_lock)
+			
+		self.Sender_Exit.clear()
 		self.sender.start()
 		
 	def terminate(self):
-		self.In_Interface_Exit.set()
-		while self.inInterface.is_alive():
-			time.sleep(1)
-			
-		self.In_Torrent_Interface_Exit.set()
-		while self.inInterface.is_alive():
-			time.sleep(1)
+		self.VSlaveHearbeat_Exit.set()
+		while self.vSlaveHeartbeat.is_alive():
+			sleep(2)
 		
 		self.CrawlerOverseer_Exit.set()
 		while self.crawlerOverseer.is_alive():
-			time.sleep(1)
+			sleep(1)
 			
 		self.TorrentHandler_Exit.set()
 		while self.torrentHandler.is_alive():
-			time.sleep(1)
+			sleep(1)
 		
 		self.stop_sender()
 			
-		self.SQLHandler_Exit.set()
-		while self.sqlHandler.is_alive():
-			time.sleep(1)	
-			
 		self.WorkerOverseer_Exit.set()
 		while self.workerOverseer.is_alive():
-			time.sleep(1)
+			sleep(1)
 		
 		self.Out_Interface_Exit.set()
 		while self.outInterface.is_alive():
-			time.sleep(1)
+			sleep(1)
 			
 		Process.terminate(self)
 	
 	def harness(self):
-		self.inInterface	= In_Interface( self.tasks, self.maxTasks, self.In_Interface_Exit)
-		self.inTorrentInterface	= In_Torrent_Interface(self.torrents, self.maxTorrents, self.In_Torrent_Interface_Exit)
-		self.crawlerOverseer= CrawlerOverseer( self.useragent, self.maxCrawlers,  self.tasks, self.doneTasks, self.newTasks,
-			self.newForms, self.contentTypes, self.delay, self.unorderedRessources, self.CrawlerOverseer_Exit)
-		self.torrentHandler	= TorrentHandler( self.torrents, self.contentTypes, self.maxActiveTorrents, self.useragent, self.doneTasks, self.newTasks, self.unorderedRessources, self.TorrentHandler_Exit)
-		self.sqlHandler		= SQLHandler(self.sqlNumber, self.unorderedRessources, self.orderedRessources, self.newForms, self.SQLHandler_Exit)						
-		self.workerOverseer	= WorkerOverseer( self.maxWorkers, self.dfs_path, self.orderedRessources, self.savedRessources,  self.WorkerOverseer_Exit)				
-		self.outInterface	= Out_Interface( self.savedRessources, self.Out_Interface_Exit) 
+		#We only need to know the in memory limitation
+
+		
+		self.crawlerOverseer= CrawlerOverseer( self.useragent, 
+			self.maxCrawlers,  self.tasks, self.doneTasks, self.newTasks,
+			self.contentTypes, self.delay, self.ressources, 
+			self.CrawlerOverseer_Exit)
+		self.torrentHandler	= TorrentHandler( self.torrents, 
+			self.contentTypes, self.maxActiveTorrents, self.useragent, 
+			self.doneTasks, self.newTasks, self.ressources, 
+			self.TorrentHandler_Exit)
+		self.workerOverseer	= WorkerOverseer( self.maxWorkers, 
+			self.dfs_path, self.ressources, self.savedRessources,  
+			self.WorkerOverseer_Exit)				
+		self.outInterface	= Out_Interface( self.savedRessources, 
+			self.Out_Interface_Exit) 
+		
+		
+		start_time	= time()
 		
 		self.start_sender()
-		
-		self.inInterface.start()
-		self.inTorrentInterface.start()
 		self.crawlerOverseer.start()
 		self.torrentHandler.start()
-		self.sqlHandler.start()
 		self.workerOverseer.start()
 		self.outInterface.start()	
 		
-	def run(self):
-		logging.info("Server started")
-		
-		self.channel.basic_consume(callback=self.proccess, queue=self.key, no_ack=True)
-		#print("Waiting")
-		while True: 
-			self.channel.wait() 
-	
-	def proccess(self, msg):
-		(header, args) =  unserialize( msg.body )
-		AMQPConsumer.process( self, msg)
-		#print("Monitor order received")
-		
-		if header == HEADER_SENDER_STOP and self.running:
+	def callback(self, data):
+		msg	= TcpServer.callback(self, data)
+		print("Begin callback")
+		if msg.t == MsgType.SLAVE_IN_TASKS :
+			for task in msg.obj:
+				if( task.nature == TaskNature.web_static_torrent ):
+					self.torrents.append( task )
+				else:
+					self.tasks.append( task )
+		elif( msg.t == MsgType.ANNOUNCE_NET_TREE_UPDATE_INCOMING 
+		and self.running):
+			print("fuck!!!!!!!!!!!!!!!!!!!!")
 			self.stop_sender()
-		elif header == HEADER_SENDER_START and self.running:
-			self.netTree.update(args)
+		elif( msg.t == MsgType.ANNOUNCE_NET_TREE_PROPAGATE 
+		and self.running):
+			print("endjoy!!!!!!!!!")
+			with self.netTree_lock:
+				self.netTree.update( msg.obj )
 			self.start_sender()	
-		elif header == HEADER_SENDER_DEFAULT:
-			#print("Nettree received")
-			self.netTree.update(args)
-			if not self.running and not args.empty():
-				#print("running")
-				self.harness()
-				self.running= True
+			print("end enjoy:::::::")
+		elif( (msg.t == MsgType.ANNOUNCE_NET_TREE 
+			or msg.t == MsgType.ANNOUNCE_NET_TREE_PROPAGATE) 
+		and not msg.obj.empty() and not self.running):
+			with self.netTree_lock:
+				self.netTree.update( msg.obj  )
+			self.harness()
+			self.running= True
+		elif msg.t == MsgType.ANNOUNCE_MONITORS:
+			with self.monitors_lock:
+				self.monitors.clear()
+				self.monitors.update( msg.obj )
+		elif msg.t == MsgType.metric_expected:
+			host, port = msg.obj
+			self.client.send( Msg( MsgType.metric_slave, 
+				(tasks_processed, time() - start_time)), host, port )
+			tasks_processed = 0
+			start_time 		= time()
+		else:
+			logging.info("Unknow received msg %s" % msg.pretty_str())
+		print("End callback")
 			
 class Slave:
-	def __init__(self, serverNumber=1, useragent="*", maxCrawlers=1, maxWorkers=2,
-		delay=86400, sqlNumber=100, dfs_path="", contentTypes={"*":False}, domainRules={"*":False}, protocolRules={"*":False},
-		originRules={"*":False}, maxTasksSize=1<<22, maxTorrentsSize=1<<22, maxNewTasksSize=1<<24, maxDoneTasksSize=1<<24,
-		maxNewFormsSize=1<<22, maxUnorderedRessourcesSize=1<<26, maxOrderedRessourcesSize=1<<26, maxSavedRessourcesSize=1<<26,
-		maxActiveTorrents=8 ) :
+	def __init__(self, monitors, serverNumber, useragent, maxCrawlers, 
+		maxWorkers, delay, dfs_path, contentTypes, 
+		domainRules, protocolRules, originRules, maxTasks, 
+		maxTorrents, maxNewTasks, maxDoneTasks,
+		maxRessources, maxSavedRessources, maxActiveTorrents):
 		
 		self.pool			= []
 		self.serverNumber 	= serverNumber
 		
 		for i in range(self.serverNumber):
-			s = Server(useragent, maxCrawlers, maxWorkers, delay, sqlNumber, dfs_path, contentTypes,
-				domainRules, protocolRules, originRules, maxTasksSize, maxTorrentsSize, maxNewTasksSize, maxDoneTasksSize, maxNewFormsSize,
-				maxUnorderedRessourcesSize, maxOrderedRessourcesSize, maxSavedRessourcesSize, maxActiveTorrents)
+			s = VSlave(monitors, useragent, maxCrawlers, maxWorkers, 
+				delay, dfs_path, contentTypes, domainRules, 
+				protocolRules, originRules, maxTasks, 
+				maxTorrents, maxNewTasks, maxDoneTasks,
+				maxRessources, maxSavedRessources, 
+				maxActiveTorrents)
 			self.pool.append( s )
+		
+		self.initTor()
 		
 		logging.info("Slave initialized")
 
+	def initTor(self):
+		self.tor_process = stem.process.launch_tor_with_config(
+		#tor_cmd="extras/Tor/tor",
+		config = {'SocksPort': str(SOCKS_PORT)},
+		init_msg_handler = lambda line : logging.info( 
+			term.format(line, term.Color.BLUE) )
+		)
 
 	def terminate(self):
 		for server in self.pool:
 			server.terminate() if server.is_alive() else () 
+		
+		self.tor_process.kill()
+		
 		logging.info("Servers stoped")
 
 	def harness(self):

@@ -1,53 +1,66 @@
 from urllib.parse import urlparse
 import time
-
+from enum import IntEnum
 import libtorrent as lt
 
-TASK_WEB_STATIC 	= 0
-TASK_WEB_STATIC_TORRENT		= 1
-TASK_WEB_STATIC_TOR			= 2
+from collections import defaultdict
 
-NO_AUTH				= 0
-AUTH_FORM			= 1
-AUTH_HTTP_BASIC		= 2
-AUTH_HTTP_DIGEST	= 3
-AUTH_FTP			= 4
 
 MAX_REFRESHRATE		= 20
+AVERAGE_TASK_SIZE	= 2048 #à affiner au cours du temps
 
-class TaskFactory:
-	def buildFromURI( url, parentTask ):
-		task 	= Task(url)
-		
-		if url[-6:] == ".onion" :
-			task.nature	= TASK_WEB_STATIC_TOR
-		elif url[:9] == "magnet://" :
-			task.nature	= TASK_WEB_STATIC_TORRENT
-			task.is_dir = True
-		else:
-			task.nature	= TASK_WEB_STATIC
-		
-		task.auth	= parentTask.auth 
+accreditationRules = defaultdict( lambda : AuthNature.no, {
+
+})
+
+class TaskNature(IntEnum):
+	web_static			= 0
+	web_static_torrent 	= 1
+	web_static_tor		= 2
+	web_static_sitemap	= 3
+	
+class AuthNature(IntEnum):
+	no				= 0
+	form			= 1
+	http_basic		= 2
+	http_digest		= 3
+	ftp				= 4
+
+#Task Factory
+def buildFromURI( url, is_dir=False ):
+	task 	= Task(url, is_dir=is_dir)
+	
+	if task.netloc[-6:] == ".onion" :
+		task.nature	= TaskNature.web_static_tor
+	elif url[:7] == "magnet:" :
+		task.nature	= TaskNature.web_static_torrent
+		task.is_dir = True
+	else:
+		task.nature	= TaskNature.web_static
+	
+	task.auth	= accreditationRules[ task.netloc ]
+	return task
+
+def buildFromURIs(urls, is_dir=False):
+	return [buildFromURI(url, is_dir) for url in urls ]
+
+def buildFromFile( ressource, tmpFile ):
+	"""
+		@brief Mainly use for .torrent
+	"""
+	
+	if ressource.metadata.contentType == "application/x-bittorrent" :
+		tmpFile.rollover()
+		task 	= Task( 
+			lt.make_magnet_uri( lt.torrent_info( tmpFile.name ) ), 
+			nature=TaskNature.web_static_torrent, is_dir=True  )
 		return task
-	
-	def buildFromURIs(urls, parentTask):
-		return [TaskFactory.buildFromURI(url, parentTask) for url in urls ]
-	
-	def buildFromFile( ressource, tmpFile, parentTask ):
-		"""
-			@brief Mainly use for .torrent
-		"""
 		
-		if ressource.metadata.contentType == "application/x-bittorrent" :
-			tmpFile.rollover()
-			task 	= Task( lt.make_magnet_uri( lt.torrent_info( tmpFile.name ) ), nature=TASK_WEB_STATIC_TORRENT, is_dir=True  )
-			return task
+	return None
 			
-		return None
-		
-		
 class Task:
-	def __init__(self, url="", lastvisited=-1, lastcontrolled=-1, lasthash="", refreshrate=1, nature=TASK_WEB_STATIC, auth=NO_AUTH, is_dir=False):
+	def __init__(self, url="", lastvisited=-1, lastcontrolled=-1, lasthash="", 
+	refreshrate=1, nature=TaskNature.web_static, auth=AuthNature.no, is_dir=False):
 		self.nature	= nature
 		self.url	= url
 		self.auth	= auth
@@ -83,3 +96,6 @@ class Task:
 		
 	def is_expediable(self, delay):
 		return time.time() - self.lastvisited >  self.refreshrate * delay
+	
+	def __str__(self):
+		return '|'.join( [self.url, str(self.nature), str(self.auth), str(self.is_dir)] )

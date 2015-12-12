@@ -1,3 +1,39 @@
--> Uncomment initTor in CrawlerOverseer.__init__
--> set sleep(s) to 12(at least) in Monitor.propagate 
--> set sleep to 60(at least) in Monitor.run
+https://www.ics.uci.edu/~pattis/ICS-33/lectures/complexitypython.txt pour le caclcul de complexité
+
+
+pour les rapports on utilise une estimation du poids moyens pour le calcul de used_ram
+(O(1) contre un truc en O(n)( même si on l'amortie)p
+
+faudra dimentionner correctement la taille des caches : 
+	Slave.py : alreadySent (l104)
+robotcache lifetime
+
+choit de la taille de max_size in SpooledTemporyFile in Handler
+
+etude sleep time 
+
+etude timeout (surtout dans tcpclient/server)
+
+
+config parfeu pour torrent/tor
+config transimission pour recupérer les fichiers téléchargés dans le bon dossier
+
+ARCCache bug:
+	dans get l82 item not found(Key error).............
+
+TODO :
+	verifier l'évolution de la ram consommée dans les rapports
+		
+	scale : 
+		test scale slaves : faileover sans reprise
+		test scale mons : faileover sans reprise
+		test scale master : faileover sans reprise
+		
+	calcul refreshrate google 
+	metric fonctionnel ie admin
+	
+	ecriture readme + commit
+	permet master/ slave et continuation (notament dans netree)
+
+Amelioration : 
+	http://burtleburtle.net/bob/hash/evahash.html : pour netarea ?

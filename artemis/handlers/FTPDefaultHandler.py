@@ -1,110 +1,118 @@
 from ftplib import FTP, FTP_TLS
 from urllib.parse import urljoin
-from artemis.Task import Task, NO_AUTH, AUTH_FTP, TASK_WEB_STATIC
-import datetime 
+from artemis.Task import Task, AuthNature, TaskNature
+from datetime import datetime
 import tempfile
 import io
 
-def previous(elmts, pos, n):
-	if n == 0 :
-		raise Exception( "Previous not found")
-	
-	if not elmts[ pos ]:
-		return previous(elmts, pos-1, n-1)
-	else :
-		return pos
 		
 def parseLine(line):
-	elmts	= line.split(" ")
+	elmts = [ l for l in line.strip().split(" ") if l ]
 	permission 	= elmts[0]
+	name = elmts[-3] if permission[0] == "l" else elmts[-1]
+	date_pos = -3 if permission[0] == "l" else -1
+	is_dir= permission[0]=="d"
 	
-	pos 		= previous( elmts, -1, len(elmts) )
-	name		= elmts[pos]
-	pos 		= previous( elmts, pos-1, len(elmts) )
-	date		= elmts[pos]
-	pos 		= previous( elmts, pos-1, len(elmts) )
-	date		= elmts[pos]+" "+date
-	pos 		= previous( elmts, pos-1, len(elmts) )
-	date		= elmts[pos]+" "+date
-	pos 		= previous( elmts, pos-1, len(elmts) )
-	size		= elmts[pos]
-	
-	
+	if is_dir :
+		return ( name, -1, is_dir)
+		
+	#pas de convention sur la date
 	try: #'%b %d %H:%M' : Jun 06 10:19 assuming current year
-		dt	= datetime.datetime.strptime( date, '%b %d %H:%M')
+		delmts = elmts[date_pos-3:date_pos]
+		date = "%s %s %s" % (delmts[0], delmts[1], delmts[2])		
+		
+		dt	= datetime.strptime( date, '%b %d %H:%M')
 		dt	= dt.replace( datetime.date.today().year ) 
 		lastModified= dt.timestamp()
 	except Exception:
 		try: #'%b %d  %Y' : "Jan 16  2012"
-			dt	= datetime.datetime.strptime( date, '%b %d %H:%M')
+			date = "%s %s  %s" % (delmts[0], delmts[1], delmts[2])
+			dt	= datetime.strptime( date, '%b %d  %Y')
 			lastModified= dt.timestamp()
 		except Exception:	
 			lastModified= -1
 
-	return ( permission, size, lastModified, name, permission[0]=="d") #[4] => idDir?
-
+	return ( name, lastModified, is_dir) 
 
 class FTPDefaultHandler:
-	def __init__(self,  accreditationCacheHandler, proxy=None):
-		self.accreditationCacheHandler 	= accreditationCacheHandler
+	def __init__(self,  accreditationCache, proxy=None):
+		self.accreditationCache 		= accreditationCache
 		self.proxy						= proxy
 		
 	def getAccreditation(self, task, ftp):
 		if self.proxy:
-			if task.auth == NO_AUTH :
+			if task.auth == AuthNature.no :
 				ftp.login("anonymous@"+task.netloc, "anonymous")
-			elif task.auth == AUTH_FTP :
-				login, pwd	= self.accreditationCacheHandler.get(task.auth, task )
+			elif task.auth == AuthNature.ftp :
+				login, pwd	= self.accreditationCache.get(task.auth, task )
 				ftp.login(login+"@"+task.netloc, pwd)
 		else:
-			if task.auth == NO_AUTH :
+			if task.auth == AuthNature.no :
 				ftp.login()
-			elif task.auth == AUTH_FTP :
-				login, pwd	= self.accreditationCacheHandler.get(task.auth, task )
+			elif task.auth == AuthNature.ftp :
+				login, pwd	= self.accreditationCache.get(task.auth, task )
 				ftp.login(login, pwd)
 	
-	def execute_dir(self, task, ftp, ):
+	def execute_dir(self, task, ftp):
 		newTasks	= []
 		lines	= []
-
-		ftp.cwd( task.path[1:] if task.path and task.path[0]=="/" else task.path ) 
 		ftp.dir( lines.append )
 		
 		for line in lines:
-			( permission, size, lastModified, name, is_dir)	= parseLine( line )
-			#print("current uri: ",task.url) 
-			#print("current name: ",name) 
-			newTasks.append( Task( url=urljoin(task.url+"/", name), nature=TASK_WEB_STATIC, auth=task.auth, is_dir=is_dir))
-			#print("line ", line)
-			#print("ntask ", urljoin(task.url+"/", name))
+			name, nothing, is_dir	= parseLine( line )
+			newTasks.append( Task( url=urljoin(task.url+"/", name), 
+				nature=TaskNature.web_static, auth=task.auth, is_dir=is_dir))
+				
 		return (newTasks, None)
 			
 	def execute(self, task):
 		buff 		= []
-		
 		if self.proxy: #not test yet
 			ftp =  FTP() if True else FTP_TLS()
 			ftp.connect( self.proxy[0], self.proxy[1])
 		else:
 			ftp =  FTP(task.netloc) if True else FTP_TLS(task.netloc)
 		
-		self.getAccreditation( task, ftp)
-		
-		if task.is_dir :
-			return self.execute_dir(task, ftp)
-		else:
-			metaBuff	= io.BytesIO()
-			ftp.retrbinary("LIST " + task.path , metaBuff.write)
-			( permission, size, lastModified, name, is_dir)	= parseLine( str(metaBuff.getvalue().decode("utf-8"))  )
+		with ftp :
+			self.getAccreditation( task, ftp)
+			path = task.path
 
-			if task.lastvisited > lastModified : 
-				task.incr()
-			elif is_dir:
-				task.is_dir = True
+			path = ( task.path[1:] if path and task.path[0]=="/" else task.path)
+			if task.is_dir :
+				if path:
+					ftp.cwd( path ) 
+
 				return self.execute_dir(task, ftp)
-			else:	
+			else:
+				meta	= []
+				tmp 	= path.rsplit("/", 1)
+
+				if len(tmp) == 2:
+					ftp.cwd(tmp[0])
+					filename = tmp[1]
+				else:
+					filename	= tmp[0]
+				ftp.retrbinary("LIST " + filename , meta.append)
+				
+				if meta :
+					is_dir = (len(meta) != 1)
+					
+					if not is_dir:
+						( name, lastModified, is_dir)	= parseLine( meta[0].decode()  )
+						is_dir = (name != filename)
+
+					if is_dir:
+						task.is_dir = True
+						if filename:
+							ftp.cwd( filename ) 
+
+						return self.execute_dir(task, ftp)
+					
+					if task.lastvisited > lastModified : 
+						task.incr()
+						return [], None
+				
 				tmpFile	= tempfile.SpooledTemporaryFile(max_size=1048576) #1Mo
-				ftp.retrbinary("RETR " + task.path, tmpFile.write)
+				ftp.retrbinary("RETR " + filename, tmpFile.write)
 
-
-			return [], tmpFile
+				return [], tmpFile

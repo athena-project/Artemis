@@ -1,6 +1,5 @@
 import pickle
 
-
 def serialize( obj ):
 	return pickle.dumps( obj, protocol=4 )
 

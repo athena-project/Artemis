@@ -46,6 +46,11 @@ pip3 install numpy sklearn scipy formasaurus
 apt-get install -y transmission-deamon python3-libtorrent #config rpc-auth = false, ratio_limit=0 no seeding see set.json, max torrent paralle à definir ici aussi
 pip3 install transmissionrpc 
 
+
+
+
+pip3 install termcolor
+
 ###
 ### END DEPENDENCES
 ###
