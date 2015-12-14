@@ -12,9 +12,11 @@ class Report:
 		
 		self.lifetime	= lifetime
 		self.deathtime	= time.time() + lifetime
+		
+		self._id		= hash( (self.host, self.port) )
 
 	def id(self):
-		return hash( (self.host, self.port) )
+		return self._id
 	
 	def load(self):
 		return float(self.used_ram)/self.max_ram
@@ -44,6 +46,21 @@ class Report:
 	def __str__(self):
 		return ("host=%s, port=%d" % (self.host, self.port) )
 		
+	def __eq__(self, net):
+		return self._id == net._id
+		
+	def __lt__(self, net):
+		return self._id < net._id
+	
+	def __le__(self, net):
+		return self._id <= net._id
+		
+	def __ge__(self, net):
+		return self._id >= net._id
+	
+	def __ne__(self, net):
+		return self._id != net._id
+ 		
 class NetareaReport(Report):
 	"""
 		@param netarea uniqu id (str)
@@ -56,15 +73,17 @@ class NetareaReport(Report):
 		self.next_netarea 	= next_netarea
 		
 	def split(self):
-		mid = floor( (next_netarea-netarea) / 2.0 )
+		mid = floor( (self.next_netarea-self.netarea) / 2.0 )
 		
 		self.used_ram = 0
 		self.next_netarea = mid
-		return NetareaReport(self.host, -1, h, 0, self.max_ram, next_netarea, self.lifetime )#number_port will be update later by the master
+		return NetareaReport(self.host, -1, h, 0, self.max_ram, self.next_netarea, self.lifetime )#number_port will be update later by the master
 	
 class MasterReport(Report):
 	def __init__(self, host, port, num_core, max_ram, maxNumNetareas, 
 	netarea_reports, lifetime=4):
+		Report.__init__(self, host, port, 0, 0)
+
 		self.host			= host
 		self.port			= port
 		self.num_core		= num_core

@@ -3,15 +3,13 @@ from .network.Msg import Msg, MsgType
 from .network.TcpServer import P_TcpServer, T_TcpServer, TcpServer
 from .network.Reports	import NetareaReport, MonitorReport
 
-from .AVL import *
-
 from time import sleep
 from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
 from .Utility import serialize, unserialize
 from copy import deepcopy
 from math import ceil
-from .Netarea import NetareaTree, MAX as NETAREA_MAX
+from .Netarea import  MAX as NETAREA_MAX, NetRing
 from enum import IntEnum
 import logging
 from collections import defaultdict
@@ -81,8 +79,8 @@ class LogicalNode: # in a logical ring
 		
 class MonServer(T_TcpServer):
 	def __init__(self, port, monitors, ev_leader, masterReports, 
-		slaveReports, netTree, Exit, monitors_lock, masters_lock, 
-		slaves_lock, netTree_lock, Propagate):
+		slaveReports, netRing, Exit, monitors_lock, masters_lock, 
+		slaves_lock, netRing_lock, Propagate):
 			
 		self.port			= port
 		self.monitors		= monitors
@@ -94,12 +92,12 @@ class MonServer(T_TcpServer):
 		
 		self.masterReports	= masterReports
 		self.slaveReports	= slaveReports
-		self.netTree		= netTree
+		self.netRing		= netRing
 		
 		self.monitors_lock	= monitors_lock
 		self.masters_lock	= masters_lock
 		self.slaves_lock	= slaves_lock
-		self.netTree_lock	= netTree_lock
+		self.netRing_lock	= netRing_lock
 				
 		self.Propagate		= Propagate
 		
@@ -119,9 +117,9 @@ class MonServer(T_TcpServer):
 			if( self.ev_leader.is_set() 
 			and not self.Propagate.is_set()
 			and not msg.obj.id() in self.slaveReports):
-				with self.netTree_lock:
+				with self.netRing_lock:
 					self.client.send( 
-						Msg(MsgType.ANNOUNCE_NET_TREE, self.netTree), 
+						Msg(MsgType.ANNOUNCE_NET_RING, self.netRing), 
 						msg.obj.host, msg.obj.port)
 			
 			with self.slaves_lock:
@@ -142,20 +140,20 @@ class MonServer(T_TcpServer):
 			with self.monitors_lock:
 				self.monitors[ msg.obj.id() ] = msg.obj
 				
-			with self.netTree_lock:
+			with self.netRing_lock:
 				self.client.send( 
-					Msg(MsgType.ANNOUNCE_NET_TREE, self.netTree), 
+					Msg(MsgType.ANNOUNCE_NET_RING, self.netRing), 
 					msg.obj.host, msg.obj.port)
-		elif msg.t == MsgType.ANNOUNCE_NET_TREE:
+		elif msg.t == MsgType.ANNOUNCE_NET_RING:
 			if not self.ev_leader.is_set():
-				with self.netTree_lock:
-					self.netTree.update( msg.obj )
+				with self.netRing_lock:
+					self.netRing.update( msg.obj )
 		elif msg.t == MsgType.metric_expected:
 			host, port = msg.obj
-			with self.monitors_lock, self.masters_lock, self.slaves_lock, self.netTree_lock:
+			with self.monitors_lock, self.masters_lock, self.slaves_lock, self.netRing_lock:
 				self.client.send( Msg(MsgType.metric_monitor, 
 					(self.monitors, self.slaveReports, self.masterReports,
-						self.netTree)
+						self.netRing)
 					), host, port)
 		elif msg.t == Action.ALG :
 			i		= self.node
@@ -286,24 +284,24 @@ class Monitor(Thread):
 		
 		self.masterReports 		= {} #received reports from masters
 		self.slaveReports 		= {} 
-		self.netTree			= NetareaTree()
+		self.netRing			= NetRing()
 				
 		self.monitors_lock		= RLock()
 		self.masters_lock		= RLock()
 		self.slaves_lock		= RLock()
-		self.netTree_lock		= RLock()
+		self.netRing_lock		= RLock()
 		
 		self.server				= MonServer( port,
 			self.monitors,
 			self.Leader,
 			self.masterReports,
 			self.slaveReports,
-			self.netTree,
+			self.netRing,
 			self.Exit,
 			self.monitors_lock,
 			self.masters_lock,
 			self.slaves_lock,
-			self.netTree_lock, 
+			self.netRing_lock, 
 			self.Propagate)
 		self.host				= self.server.get_host()
 		self.port				= port
@@ -402,9 +400,9 @@ class Monitor(Thread):
 			with self.masters_lock:
 				masters =  deepcopy( list(self.masterReports.values() ))
 			if unallocated_netarea:
-				with self.netTree_lock:
+				with self.netRing_lock:
 					for net in unallocated_netarea:
-						self.netTree.suppr( net.netarea )
+						del self.netRing[ net.netarea ]
 				self.allocate( masters, unallocated_netarea)	
 				
 				
@@ -427,13 +425,7 @@ class Monitor(Thread):
 				if slave.is_expired():
 					logging.debug( slave )
 					del self.slaveReports[ key ]
-			
-	def buildNetTreeFromScratch(self):
-		with self.netTree_lock and self.masters_lock: 
-			for master in self.masterReports.values():
-				for netarea in master.netarea_reports:
-					self.netTree[netarea.netarea] = netarea
-						
+							
 	def balance(self):
 		with self.masters_lock:
 			masters =  deepcopy( list(self.masterReports.values() ))
@@ -443,10 +435,11 @@ class Monitor(Thread):
 			return 
 		
 		if not self.is_overload( masters ):
-			with self.netTree_lock: 
-				flag = self.netTree.empty()
-			if flag:
-				self.buildNetTreeFromScratch()
+			with self.netRing_lock and self.masters_lock:
+				if not self.netRing:
+					self.netRing.update([netarea
+						for master in self.masterReports.values()
+						for netarea in master.netarea_reports])
 
 			return 
 		unallocated_netarea	= []
@@ -466,26 +459,15 @@ class Monitor(Thread):
 		
 	def propagate(self, masters):
 		self.Propagate.set()
-
-		net_tree = NetareaTree()
-		for master in masters:
-			for netarea in master.netarea_reports:
-				net_tree[netarea.netarea]=netarea
-				
 		
 		#Stop Slave.sender
 		with self.slaves_lock:
 			for slave in self.slaveReports.values():
 				self.client.send( 
-					Msg(MsgType.ANNOUNCE_NET_TREE_UPDATE_INCOMING, None), 
+					Msg(MsgType.ANNOUNCE_NET_RING_UPDATE_INCOMING, None), 
 					slave.host, slave.port)
 		sleep(2)
-		#with self.netTree_lock: 
-			#self.netTree.update( net_tree )
-			#for master in masters:
-				#for netarea in master.netarea_reports:
-					#self.netTree.update_netarea(netarea)
-		 
+		
 		#Start new netarea
 		for master in masters:
 			self.client.send( 
@@ -493,36 +475,29 @@ class Monitor(Thread):
 				master.host, master.port)
 				
 		sleep(2)#master envoi la reponse toutes les secondes s'il ne répond pas tampis
-		with self.masters_lock:
-			for k in self.masterReports:
-				print(self.masterReports[k])
 		
-		with self.netTree_lock: 
-			self.netTree.update( net_tree )
+		with self.netRing_lock: 
+			self.netRing.update( [ netarea for master in masters
+				for netarea in master.netarea_reports] )
 			
 			with self.masters_lock: 
 				for master in self.masterReports.values():
 					for netarea in master.netarea_reports:
-						try:
-							self.netTree.update_netarea(netarea)
-						except Exception as e:
-							logging.debug( "%s %s" % (
-								traceback.extract_tb(sys.exc_info()[2]),
-								str(e)))
+						self.netRing[ netarea.netarea ] = netarea
 		
-			netTree = deepcopy( self.netTree )
+			netRing = deepcopy( self.netRing )
 	
 		#Start Slave.sender
 		with self.slaves_lock :
 			for slave in self.slaveReports.values():			
 				self.client.send( 
-					Msg(MsgType.ANNOUNCE_NET_TREE_PROPAGATE, netTree ), 
+					Msg(MsgType.ANNOUNCE_NET_RING_PROPAGATE, netRing ), 
 					slave.host, slave.port)
 		
 		with self.monitors_lock:
 			for m_host, m_port in self.monitors :
-				self.client.send( Msg(MsgType.ANNOUNCE_NET_TREE, 
-				netTree), m_host, m_port )
+				self.client.send( Msg(MsgType.ANNOUNCE_NET_RING, 
+				netRing), m_host, m_port )
 		self.Propagate.clear()
 		logging.debug("Propagate, done")
 		
