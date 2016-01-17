@@ -29,8 +29,6 @@ TODO :
 		test scale mons : faileover sans reprise
 		test scale master : faileover sans reprise
 		
-	calcul refreshrate google 
-	metric fonctionnel ie admin
 	
 	ecriture readme + commit
 	permet master/ slave et continuation (notament dans netree)

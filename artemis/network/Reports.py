@@ -2,27 +2,25 @@ from artemis.Netarea import MAX
 import time
 import artemis.Utility as utility
 
-class Report:
-	# host,port : coordonnées pour le contacter
-	def __init__(self, host, port, used_ram, max_ram, lifetime=4):
+#for human, https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
+def sizeof_fmt(num, suffix='B'):
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
+
+
+class AbstractReport:
+	def __init__(self, host, port, lifetime=4):
 		self.host 		= host
 		self.port		= port
-		self.used_ram 	= used_ram
-		self.max_ram 	= max_ram
 		
 		self.lifetime	= lifetime
 		self.deathtime	= time.time() + lifetime
-		
-		self._id		= hash( (self.host, self.port) )
 
 	def id(self):
-		return self._id
-	
-	def load(self):
-		return float(self.used_ram)/self.max_ram
-		
-	def is_overload(self):
-		return self.load()>0.85
+		return hash( (self.host, self.port) )
 		
 	def is_expired(self):
 		return time.time() > self.deathtime
@@ -36,31 +34,32 @@ class Report:
 	def update(self, n):
 		self.host 		= n.host
 		self.port 		= n.port
-		self.used_ram 	= n.used_ram
-		self.max_ram 	= n.max_ram
 		self.deathtime 	= n.deathtime
 	
 	def reset(self):
 		self.deathtime	= time.time() + self.lifetime
 		
+class Report(AbstractReport):
+	# host,port : coordonnées pour le contacter
+	def __init__(self, host, port, used_ram, max_ram, lifetime=4):
+		AbstractReport.__init__(self, host, port, lifetime)
+		self.used_ram 	= used_ram
+		self.max_ram 	= max_ram
+
+	def load(self):
+		return float(self.used_ram)/self.max_ram
+		
+	def is_overload(self):
+		return self.load()>0.85
+		
+	def update(self, n):
+		AbstractReport.update(self, n)
+		self.used_ram 	= n.used_ram
+		self.max_ram 	= n.max_ram
+	
 	def __str__(self):
-		return ("host=%s, port=%d" % (self.host, self.port) )
+		return ("host=%s, port=%d, used_ram=%s/%s" % (self.host, self.port, sizeof_fmt(self.used_ram), sizeof_fmt(self.max_ram)) )
 		
-	def __eq__(self, net):
-		return self._id == net._id
-		
-	def __lt__(self, net):
-		return self._id < net._id
-	
-	def __le__(self, net):
-		return self._id <= net._id
-		
-	def __ge__(self, net):
-		return self._id >= net._id
-	
-	def __ne__(self, net):
-		return self._id != net._id
- 		
 class NetareaReport(Report):
 	"""
 		@param netarea uniqu id (str)
@@ -73,17 +72,15 @@ class NetareaReport(Report):
 		self.next_netarea 	= next_netarea
 		
 	def split(self):
-		mid = floor( (self.next_netarea-self.netarea) / 2.0 )
+		mid = floor( (next_netarea-netarea) / 2.0 )
 		
 		self.used_ram = 0
 		self.next_netarea = mid
-		return NetareaReport(self.host, -1, h, 0, self.max_ram, self.next_netarea, self.lifetime )#number_port will be update later by the master
+		return NetareaReport(self.host, -1, h, 0, self.max_ram, next_netarea, self.lifetime )#number_port will be update later by the master
 	
 class MasterReport(Report):
 	def __init__(self, host, port, num_core, max_ram, maxNumNetareas, 
 	netarea_reports, lifetime=4):
-		Report.__init__(self, host, port, 0, 0)
-
 		self.host			= host
 		self.port			= port
 		self.num_core		= num_core
@@ -106,7 +103,21 @@ class MasterReport(Report):
 class SlaveReport(Report):
 	def __init__(self, host, port, used_ram, max_ram, lifetime=4):
 		Report.__init__(self, host, port, used_ram, max_ram, lifetime)
+	
+class SlaveMetrics(AbstractReport):
+	def __init__(self, host, port, tasks_processed, delay, lifetime=4):
+		AbstractReport.__init__(self, host, port, lifetime)
+		self.tasks_processed = tasks_processed
+		self.delay 			 = delay
+	
+	def speed(self):
+		return float(self.tasks_processed) / float(self.delay)	
 		
+	def __str__(self):
+		return ("""host=%s, port=%d, %d  tasks processed in %d s at 
+			%ft/s""" % (self.host, self.port, self.tasks_processed, 
+			self.delay, self.speed()) )
+
 class MonitorReport(Report):
 	def __init__(self, host, port, lifetime=60):
 		Report.__init__(self, host, port, 0, 0, lifetime)

@@ -56,7 +56,6 @@ class TcpServer():
 		raise PortNotFound()
 		
 	def callback(self, data):
-		m = Msg()
 		return unserialize( data )
 		
 	def run(self):

@@ -7,9 +7,9 @@ class MsgType(IntEnum):
 	ANNOUNCE_SLAVE						= 0x1 # un esclave se declare aux moniteurs
 	ANNOUNCE_MASTER						= 0x2 # un maitre se declare aux moniteurs
 	ANNOUNCE_SLAVE_MAP					= 0x3 # le moniteur leader declare les esclaves à tous les maitres
-	ANNOUNCE_NET_RING					= 0x4 # le moniteur leader declare les maitres à tous les esclaves
-	ANNOUNCE_NET_RING_UPDATE_INCOMING	= 0x5 # le moniteur leader déclare aux esclaves qu'il va y avoir une maj
-	ANNOUNCE_NET_RING_PROPAGATE			= 0x51# le moniteur leader déclare aux esclaves que les modifications
+	ANNOUNCE_NET_TREE					= 0x4 # le moniteur leader declare les maitres à tous les esclaves
+	ANNOUNCE_NET_TREE_UPDATE_INCOMING	= 0x5 # le moniteur leader déclare aux esclaves qu'il va y avoir une maj
+	ANNOUNCE_NET_TREE_PROPAGATE			= 0x51# le moniteur leader déclare aux esclaves que les modifications
 	ANNOUNCE_NETAREA_UPDATE				= 0x6 # le moniteur leader déclare les neatareas à managé aux serveuurs maitres
 	MASTER_IN_TASKS						= 0x7 # tasks from slave to master
 	MASTER_DONE_TASKS					= 0x8 # tasks from slave to master

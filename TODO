@@ -1,0 +1,3 @@
+-> Use DHT like algorithms instead of NetTree. 
+-> New allocation algorithm for netarea, in order to uniformly balance load on masters.
+-> Use a gaussian law for refreshrate.

@@ -4,6 +4,7 @@ from multiprocessing import Process, Queue
 from .Task import Task, TaskNature, AVERAGE_TASK_SIZE
 from copy import copy, deepcopy
 from .handlers.HandlerRules import getHandler
+from .AVL import EmptyAVL
 
 import mimetypes
 import sys, traceback
@@ -17,8 +18,8 @@ import transmissionrpc
 import tempfile
 import logging
 from time import sleep, time
-from .Netarea import Phi, NetRing #fonction utilisé pour associé une url à une netarea  url -> netarea key
-from .Cache import  ARCCache, EmptyItem
+from .Netarea import Phi, NetareaTree #fonction utilisé pour associé une url à une netarea  url -> netarea key
+from .Cache import  ARCCache
 from collections import deque, defaultdict
 import stem.process #tor
 from stem.util import term
@@ -31,7 +32,7 @@ from .RessourceFactory	 import build
 from .network.TcpServer import T_TcpServer, P_TcpServer, TcpServer
 from .network.TcpClient import TcpClient
 from .network.Msg		import MsgType, Msg
-from .network.Reports	import SlaveReport, MonitorReport
+from .network.Reports	import SlaveReport, MonitorReport, SlaveMetrics
 
 
 #logging.getLogger('transmissionrpc').setLevel(logging.DEBUG)
@@ -87,11 +88,11 @@ class VSlaveHearbeat( Thread ):
 			sleep(1)
 		
 class Sender( Thread ): 
-	def __init__(self, newTasks, doneTasks, netRing, domainRules,
-		protocolRules, originRules, delay, Exit, netRing_lock):
+	def __init__(self, newTasks, doneTasks, netTree, domainRules,
+		protocolRules, originRules, delay, Exit, netTree_lock):
 		"""
 			@param newTasks			- deque which contains the task collected by the crawlers
-			@param netRing			- AVL which contains netaarea active on the network
+			@param netTree			- AVL which contains netaarea active on the network
 			@param domainRules		- { "domain1" : bool (true ie allowed False forbiden) }, "*" is the default rule
 			@param protocolRules	- { "protocol1" : bool (true ie allowed False forbiden) }, "*" is the default protocol
 			@param originRules		- { "origin1" : bool (true ie allowed False forbiden) }, "*" is the default origin,
@@ -105,7 +106,7 @@ class Sender( Thread ):
 
 		self.newTasks		= newTasks
 		self.doneTasks		= doneTasks
-		self.netRing		= netRing
+		self.netTree		= netTree
 		
 		self.domainRules	= domainRules 
 		self.protocolRules	= protocolRules
@@ -114,7 +115,7 @@ class Sender( Thread ):
 		self.delay			= delay
 		self.alreadySent	= ARCCache( 10**4 ) 
 		self.Exit			= Exit
-		self.netRing_lock	= netRing_lock
+		self.netTree_lock	= netTree_lock
 		
 		logging.info("Sender initialized")
 
@@ -128,9 +129,8 @@ class Sender( Thread ):
 		"""
 		url = task.url
 		
-		record = self.alreadySent[url]
-		if( not isinstance(record, EmptyItem)
-		and not record.is_expediable(self.delay) ):
+		if( url in  self.alreadySent
+		and not self.alreadySent[url].is_expediable(self.delay) ):
 			return False
 		
 		#if not self.originRules[task.origin]):
@@ -151,29 +151,29 @@ class Sender( Thread ):
 
 		while tasks:
 			task 	= tasks.pop()
-			with self.netRing_lock:
-				netarea	= self.netRing[ Phi(task) ]
-				host	= netarea.host
-				port	= netarea.port
+			with self.netTree_lock:
+				key		= self.netTree.search( Phi(task) ).netarea
+				host	= self.netTree[key].host
+				port	= self.netTree[key].port
 			
-			buffers[netarea].append( task )
+			buffers[key].append( task )
 			
-			if len( buffers[netarea] ) > TASK_BUNDLE_LEN :
+			if len( buffers[key] ) > TASK_BUNDLE_LEN :
 				self.client.send(
-					Msg(MsgType.MASTER_IN_TASKS, buffers[netarea]), 
+					Msg(MsgType.MASTER_IN_TASKS, buffers[key]), 
 					host, port)
-				buffers[netarea] = []
+				buffers[key] = []
 		
 		#empty the buffers
-		for netarea in buffers:
-			if buffers[netarea]: #len(buffers[netarea] <= TASK_BUNDLE_LEN
-				with self.netRing_lock:
-					host	= netarea.host
-					port	= netarea.port
+		for key in buffers:
+			if buffers[key]: #len(buffers[key] <= TASK_BUNDLE_LEN
+				with self.netTree_lock:
+					host	= self.netTree[key].host
+					port	= self.netTree[key].port
 				self.client.send( 
-					Msg(MsgType.MASTER_IN_TASKS, buffers[netarea]), 
+					Msg(MsgType.MASTER_IN_TASKS, buffers[key]), 
 					host, port)
-				buffers[netarea] = []
+				buffers[key] = []
 				
 	def process(self):
 		new_tasks=[] #only valid and fresh urls
@@ -193,7 +193,6 @@ class Sender( Thread ):
 			try:
 				self.process()
 			except EmptyAVL:
-				print("EmptyAVL")
 				pass
 			sleep(1)
 		
@@ -587,7 +586,7 @@ class Out_Interface( Thread ):
 				pass
 			
 			if ressources:
-				pass
+				ressources=[]
 				#self.client.send( Msg( something ,ressources), somewhere, somewhere )
 				
 	def run(self):
@@ -630,7 +629,7 @@ class VSlave(P_TcpServer):
 		self.delay				= delay
 		self.dfs_path			= dfs_path
 		
-		self.netRing			= NetRing()
+		self.netTree			= NetareaTree()
 		self.contentTypes		= contentTypes
 		self.domainRules		= domainRules
 		self.protocolRules		= protocolRules
@@ -662,11 +661,10 @@ class VSlave(P_TcpServer):
 		self.Out_Interface_Exit				= Event()
 		
 		self.monitors_lock					= RLock()
-		self.netRing_lock					= RLock()
+		self.netTree_lock					= RLock()
 		
-		self.running		= False # True when netRing received
+		self.running		= False # True when netTree received
 		
-		self.client 		= TcpClient()
 		self.vSlaveHeartbeat	= VSlaveHearbeat( self.monitors, 
 			SlaveReport(self.get_host(), self.port, 0, 
 				self.maxTasks+self.maxTorrents),
@@ -684,13 +682,13 @@ class VSlave(P_TcpServer):
 	def start_sender(self):
 		self.sender	= Sender( self.newTasks, 
 			self.doneTasks, 
-			self.netRing, 
+			self.netTree, 
 			self.domainRules, 
 			self.protocolRules, 
 			self.originRules, 
 			self.delay, 
 			self.Sender_Exit,
-			self.netRing_lock)
+			self.netTree_lock)
 			
 		self.Sender_Exit.clear()
 		self.sender.start()
@@ -722,8 +720,6 @@ class VSlave(P_TcpServer):
 	
 	def harness(self):
 		#We only need to know the in memory limitation
-
-		
 		self.crawlerOverseer= CrawlerOverseer( self.useragent, 
 			self.maxCrawlers,  self.tasks, self.doneTasks, self.newTasks,
 			self.contentTypes, self.delay, self.ressources, 
@@ -738,7 +734,6 @@ class VSlave(P_TcpServer):
 		self.outInterface	= Out_Interface( self.savedRessources, 
 			self.Out_Interface_Exit) 
 		
-		
 		start_time	= time()
 		
 		self.start_sender()
@@ -747,28 +742,29 @@ class VSlave(P_TcpServer):
 		self.workerOverseer.start()
 		self.outInterface.start()	
 		
+		self.client 		= TcpClient()
+		
 	def callback(self, data):
 		msg	= TcpServer.callback(self, data)
-
 		if msg.t == MsgType.SLAVE_IN_TASKS :
 			for task in msg.obj:
 				if( task.nature == TaskNature.web_static_torrent ):
 					self.torrents.append( task )
 				else:
 					self.tasks.append( task )
-		elif( msg.t == MsgType.ANNOUNCE_NET_RING_UPDATE_INCOMING 
+		elif( msg.t == MsgType.ANNOUNCE_NET_TREE_UPDATE_INCOMING 
 		and self.running):
 			self.stop_sender()
-		elif( msg.t == MsgType.ANNOUNCE_NET_RING_PROPAGATE 
+		elif( msg.t == MsgType.ANNOUNCE_NET_TREE_PROPAGATE 
 		and self.running):
-			with self.netRing_lock:
-				self.netRing.set( msg.obj )
+			with self.netTree_lock:
+				self.netTree.update( msg.obj )
 			self.start_sender()	
-		elif( (msg.t == MsgType.ANNOUNCE_NET_RING 
-			or msg.t == MsgType.ANNOUNCE_NET_RING_PROPAGATE) 
-		and msg.obj and not self.running):
-			with self.netRing_lock:
-				self.netRing.update( msg.obj  )
+		elif( (msg.t == MsgType.ANNOUNCE_NET_TREE 
+			or msg.t == MsgType.ANNOUNCE_NET_TREE_PROPAGATE) 
+		and not msg.obj.empty() and not self.running):
+			with self.netTree_lock:
+				self.netTree.update( msg.obj  )
 			self.harness()
 			self.running= True
 		elif msg.t == MsgType.ANNOUNCE_MONITORS:
@@ -777,8 +773,12 @@ class VSlave(P_TcpServer):
 				self.monitors.update( msg.obj )
 		elif msg.t == MsgType.metric_expected:
 			host, port = msg.obj
-			self.client.send( Msg( MsgType.metric_slave, 
-				(tasks_processed, time() - start_time)), host, port )
+			global tasks_processed, start_time
+
+			self.client.send( Msg( MsgType.metric_slave, SlaveMetrics( 
+				self.get_host(), self.port, 
+				tasks_processed, time() - start_time) ), host, port )
+
 			tasks_processed = 0
 			start_time 		= time()
 		else:
@@ -808,6 +808,7 @@ class Slave:
 		logging.info("Slave initialized")
 
 	def initTor(self):
+		return None;
 		self.tor_process = stem.process.launch_tor_with_config(
 		#tor_cmd="extras/Tor/tor",
 		config = {'SocksPort': str(SOCKS_PORT)},
