@@ -1,7 +1,8 @@
 #!/bin/bash
 
-LOG = /var/log/artemis
+mkdir -p "/var/log/artemis"
+mkdir -p "/usr/local/bin/artemis"
 
-mkdir -p $LOG
-
+sudo cp *.py "/usr/local/bin/artemis"
 sudo python3.4 setup.py install
+

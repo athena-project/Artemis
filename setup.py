@@ -10,7 +10,8 @@ setup(name="Artemis",
 		platforms="",#will come soon
 		license="",#will come soon
 		package_dir = {"artemis": "src"},
-		packages=["artemis"],
+		packages=["artemis", "artemis.accreditation", "artemis.db", 
+                  "artemis.extractors", "artemis.handlers", "artemis.network", "artemis.tests"],
 		requires=["transmissionrpc", "stem", "lxml", "pycurl"],
 		data_files=[
 		  #("log", os.listdir("log")),
