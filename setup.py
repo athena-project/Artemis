@@ -11,12 +11,12 @@ setup(name="Artemis",
 		license="",#will come soon
 		package_dir = {"artemis": "src"},
 		packages=["artemis"],
-		requires=["transmissionrpc", "stem", "redis", "pymysql", "lxml",
-			"amqp", "pycurl"],
-		data_files=[("log", os.listdir("log")),
-                  ("conf", os.listdir("conf")),
-                  ("certs", os.listdir("certs")),
-                  ("extras", os.listdir("extras"))
+		requires=["transmissionrpc", "stem", "lxml", "pycurl"],
+		data_files=[
+		  #("log", os.listdir("log")),
+                  ("conf", [ os.path.join("conf", k) for k in os.listdir("conf") ]),
+                  ("certs", [ os.path.join("certs", k) for k in os.listdir("certs") ]),
+                  #("extras", os.listdir("extras"))
                   #("/etc/init.d", ["init-script"])
                   ]
     )
