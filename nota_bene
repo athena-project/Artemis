@@ -18,9 +18,6 @@ etude timeout (surtout dans tcpclient/server)
 config parfeu pour torrent/tor
 config transimission pour recupérer les fichiers téléchargés dans le bon dossier
 
-ARCCache bug:
-	dans get l82 item not found(Key error).............
-
 TODO :
 	verifier l'évolution de la ram consommée dans les rapports
 		

@@ -80,7 +80,6 @@ class AdminClient:
 	def refresh_monitors(self):
 		with self.monitors_lock:
 			for mon in self.monitors.values():
-				print(self.port)
 				self.client.send( Msg( MsgType.metric_expected, 
 					(self.host, self.port) ), mon.host, mon.port)
 	
