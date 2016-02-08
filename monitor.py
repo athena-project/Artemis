@@ -9,7 +9,7 @@ debug = True
 
 config = configparser.ConfigParser()
 config.optionxform=str
-config.read('/usr/local/conf/monitor.ini')
+config.read('/usr/local/conf/artemis/monitor.ini')
 
 if debug :
 	logging.basicConfig( 

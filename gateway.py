@@ -19,7 +19,7 @@ port = args.port
 
 config = configparser.ConfigParser()
 config.optionxform=str
-config.read('/usr/local/conf/gateway.ini')
+config.read('/usr/local/conf/artemis/gateway.ini')
 
 
 def configDict2boolDict(cDict):
