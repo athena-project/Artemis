@@ -19,7 +19,7 @@ port = args.port
 
 config = configparser.ConfigParser()
 config.optionxform=str
-config.read('conf/gateway.ini')
+config.read('/usr/local/conf/gateway.ini')
 
 
 def configDict2boolDict(cDict):
@@ -48,8 +48,8 @@ context.check_hostname = False
 context.verify_mode = ssl.CERT_NONE
 
 context = ssl.create_default_context()
-context.load_cert_chain(certfile="certs/client.crt", keyfile="certs/client.key", password="none")
-context.load_verify_locations("certs/server.crt")
+context.load_cert_chain(certfile="/usr/local/certs/artemis/client.crt", keyfile="/usr/local/certs/artemis/client.key", password="none")
+context.load_verify_locations("/usr/local/certs/artemis/server.crt")
 context.verify_mode = ssl.CERT_REQUIRED
 context.check_hostname=False
 

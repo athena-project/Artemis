@@ -9,7 +9,7 @@ debug = True
 
 config = configparser.ConfigParser()
 config.optionxform=str
-config.read('conf/master.ini')
+config.read('/usr/local/conf/master.ini')
 
 if debug :
 	logging.basicConfig(

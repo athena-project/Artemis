@@ -21,8 +21,8 @@ class TcpServer():
 			must surcharge callback at least, and stop_function
 		"""		
 		self.context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH) 
-		self.context.load_cert_chain(certfile="certs/server.crt", keyfile="certs/server.key", password="none")
-		self.context.load_verify_locations("certs/client.crt")
+		self.context.load_cert_chain(certfile="/usr/local/certs/artemis/server.crt", keyfile="/usr/local/certs/artemis/server.key", password="none")
+		self.context.load_verify_locations("/usr/local/certs/artemis/client.crt")
 		self.context.verify_mode = ssl.CERT_REQUIRED
 
 			

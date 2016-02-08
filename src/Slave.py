@@ -277,7 +277,7 @@ class Crawler( Thread ):
 		self.contentTypes		= contentTypes 
 		self.delay				= delay
 				
-		self.accreditationCache	= AccreditationCache(4194304, "accreditation.sql") #4MB
+		self.accreditationCache	= AccreditationCache(4194304, "/usr/local/conf/artemis/accreditation.sql") #4MB
 			
 		self.ressources			= ressources
 		self.Exit 				= Exit

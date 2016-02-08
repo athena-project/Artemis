@@ -19,8 +19,8 @@ class Sender(Thread):
 		self.dataMap			= {}		
 		
 		self.context = ssl.create_default_context()
-		self.context.load_cert_chain(certfile="certs/client.crt", keyfile="certs/client.key", password="none")
-		self.context.load_verify_locations("certs/server.crt")
+		self.context.load_cert_chain(certfile="/usr/local/certs/artemis/client.crt", keyfile="/usr/local/certs/artemis/client.key", password="none")
+		self.context.load_verify_locations("/usr/local/certs/artemis/server.crt")
 		self.context.verify_mode = ssl.CERT_REQUIRED
 		self.context.check_hostname=False
 		

@@ -9,7 +9,7 @@ debug = True
 
 config = configparser.ConfigParser()
 config.optionxform=str
-config.read('conf/monitor.ini')
+config.read('/usr/local/conf/monitor.ini')
 
 if debug :
 	logging.basicConfig( 

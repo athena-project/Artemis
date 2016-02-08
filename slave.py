@@ -8,7 +8,7 @@ debug = True
 
 config = configparser.ConfigParser()
 config.optionxform=str
-config.read('conf/slave.ini')
+config.read('/usr/local/conf/slave.ini')
 
 if debug :
 	logging.basicConfig(
