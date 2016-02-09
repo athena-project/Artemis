@@ -28,7 +28,7 @@ def configDict2boolDict(cDict):
 
 s=Slave(
 	host					= config['General']['host'],
-	monitors				= [('127.0.1.1', 1984)],
+	monitors				= [('138.231.140.228', 1984)],
 	serverNumber			= int( config['General']['serverNumber'] ), 
 	useragent				= config['General']['useragent'], 
 	maxCrawlers				= int( config['Thread']['maxCrawlers'] ),  

@@ -33,7 +33,7 @@ class TcpServer():
 	
 	def get_host(self):
 		"""return a valid host in order to connect the current server"""
-		return socket.gethostbyname( socket.gethostname())
+		return socket.gethostbyname( socket.gethostname()) if self.host=='' else self.host
 		
 	def bind(self):
 		self.serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

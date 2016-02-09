@@ -24,7 +24,7 @@ else :
 
 master = Master(
 	host 			= config['General']['host'],
-	monitors		= [('127.0.1.1', 1984)],
+	monitors		= [('138.231.140.228', 1984)],
 	useragent		= config['General']['useragent'],
 	delay 			= int( config['Update']['delay'] ),
 	maxNumNetareas	= int( config['Netarea']['maxNumNetareas'] ),
