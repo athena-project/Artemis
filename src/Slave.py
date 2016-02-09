@@ -600,7 +600,7 @@ class Out_Interface( Thread ):
 		self.add_tasks()
 
 class VSlave(P_TcpServer):
-	def __init__(self, monitors, useragent, maxCrawlers, maxWorkers, 
+	def __init__(self, host, monitors, useragent, maxCrawlers, maxWorkers, 
 		delay, dfs_path, contentTypes, domainRules, 
 		protocolRules, originRules, maxTasks, maxTorrents, 
 		maxNewTasks, maxDoneTasks, maxRessources, 
@@ -615,7 +615,8 @@ class VSlave(P_TcpServer):
 			@param sqlNumber		-
 			@brief
 		"""
-		P_TcpServer.__init__(self)
+		P_TcpServer.__init__(self, host)
+		self.host = self.get_host()
 		
 		self.monitors			= {}
 		for host, port in monitors:
@@ -785,7 +786,7 @@ class VSlave(P_TcpServer):
 			logging.info("Unknow received msg %s" % msg.pretty_str())
 			
 class Slave:
-	def __init__(self, monitors, serverNumber, useragent, maxCrawlers, 
+	def __init__(self, host, monitors, serverNumber, useragent, maxCrawlers, 
 		maxWorkers, delay, dfs_path, contentTypes, 
 		domainRules, protocolRules, originRules, maxTasks, 
 		maxTorrents, maxNewTasks, maxDoneTasks,
@@ -795,7 +796,7 @@ class Slave:
 		self.serverNumber 	= serverNumber
 		
 		for i in range(self.serverNumber):
-			s = VSlave(monitors, useragent, maxCrawlers, maxWorkers, 
+			s = VSlave(host, monitors, useragent, maxCrawlers, maxWorkers, 
 				delay, dfs_path, contentTypes, domainRules, 
 				protocolRules, originRules, maxTasks, 
 				maxTorrents, maxNewTasks, maxDoneTasks,

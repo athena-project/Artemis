@@ -12,14 +12,14 @@ class PortNotFound(Exception):
 	pass
 
 class TcpServer(): 
-	host	= '' #all available interfaces
 	port		= 1571
 	timeout 	= 0.001
 	
-	def __init__(self):
+	def __init__(self, host=''):
 		"""
 			must surcharge callback at least, and stop_function
 		"""		
+		self.host = host
 		self.context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH) 
 		self.context.load_cert_chain(certfile="/usr/local/certs/artemis/server.crt", keyfile="/usr/local/certs/artemis/server.key", password="none")
 		self.context.load_verify_locations("/usr/local/certs/artemis/client.crt")
@@ -46,7 +46,7 @@ class TcpServer():
 				(colored('%d', 'red', attrs=['reverse', 'blink']) % self.port)))
 		
 	def find_port(self):
-		for k in range(1000):
+		for k in range(10000):
 			self.port += 1
 			try:
 				self.bind()
@@ -125,14 +125,14 @@ class TcpServer():
 		self.serversocket.close()
 
 class T_TcpServer(TcpServer,Thread):	
-	def __init__(self, Exit):
+	def __init__(self, host, Exit):
 		Thread.__init__(self)
-		TcpServer.__init__(self)
+		TcpServer.__init__(self, host)
 
-		self.Exit 		= Exit
+		self.Exit 			= Exit
 		self.stop_function	= lambda  : not self.Exit.is_set()
 	
 class P_TcpServer(TcpServer, Process):
-	def __init__(self):
+	def __init__(self, host):
 		Process.__init__(self)
-		TcpServer.__init__(self)
+		TcpServer.__init__(self, host)

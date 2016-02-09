@@ -10,7 +10,7 @@ from threading import Lock, Thread, Event
 from artemis.Utility import unserialize
 
 class AdminServer(T_TcpServer):
-	def __init__(self, monitors, slaveReports, masterReports, netTree,
+	def __init__(self, host, monitors, slaveReports, masterReports, netTree,
 	slaveMetrics, monitors_lock, slaves_lock, masters_lock, netTree_lock, 
 	slaveMetrics_lock, Exit):
 		
@@ -27,7 +27,7 @@ class AdminServer(T_TcpServer):
 		self.netTree_lock 	= netTree_lock
 		self.slaveMetrics_lock = slaveMetrics_lock
 		
-		T_TcpServer.__init__(self, Exit)
+		T_TcpServer.__init__(self, host, Exit)
 		
 	def callback(self, data):
 		msg	= TcpServer.callback( self, data)
@@ -46,7 +46,7 @@ class AdminServer(T_TcpServer):
 			logging.info("Unknow received msg %s" % msg.pretty_str())
 			
 class AdminClient:
-	def __init__(self, monitors):
+	def __init__(self, host, monitors):
 		self.monitors 		= monitors
 		self.slaveReports	= {}
 		self.masterReports	= {}
@@ -62,6 +62,7 @@ class AdminClient:
 		self.Exit 			= Event()
 		
 		self.server 		= AdminServer(
+			host,
 			self.monitors, self.slaveReports, self.masterReports, 
 			self.netTree, self.slaveMetrics, self.monitors_lock, 
 			self.slaves_lock, self.masters_lock, self.netTree_lock, 

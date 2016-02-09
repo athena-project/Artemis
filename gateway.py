@@ -57,7 +57,7 @@ sock = context.wrap_socket(socket.socket(socket.AF_INET), server_hostname=host)
 sock.connect((host, port))
 
 
-msg = serialize( Msg(MsgType.MASTER_IN_TASKS, tasks ) )
+msg = serialize( Msg(MsgType.SLAVE_IN_TASKS, tasks ) )
 print("connected")
 
 if( len(msg) != sock.send(msg) ):

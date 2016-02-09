@@ -29,7 +29,7 @@ class Master():
 		@param maxRam used by this server
 		@param maxCore max core used by this server
 	"""
-	def __init__(self, monitors, useragent, delay, maxNumNetareas, 
+	def __init__(self, host, monitors, useragent, delay, maxNumNetareas, 
 	maxRamNetarea):
 		self.monitors			= {}
 		for host, port in monitors:
@@ -57,7 +57,9 @@ class Master():
 		self.monitors_lock					= RLock()
 		self.netarea_reports_lock			= RLock()
 		
-		self.masterServer		= MasterServer(self, 
+		self.masterServer		= MasterServer(
+			host,
+			self, 
 			self.monitors, 
 			self.netarea_reports, 
 			self.MasterServer_Exit,
@@ -78,7 +80,7 @@ class Master():
 				
 				
 		shared_used_ram	= Value('i', 0)
-		s = NetareaManager( netarea.netarea, self.out_workers, 
+		s = NetareaManager( self.host, netarea.netarea, self.out_workers, 
 			maxInTasksSize, maxDoneTasksSize, maxOutTasksSize, 
 			self.useragent, self.delay, maxTasksMapSize, 
 			maxRobotsSize, shared_used_ram)
@@ -126,9 +128,9 @@ class Master():
 			sleep(1)
 			
 class MasterServer(T_TcpServer):
-	def __init__(self, parent, monitors, netarea_reports, Exit,
+	def __init__(self, host, parent, monitors, netarea_reports, Exit,
 	monitors_lock, netarea_reports_lock):
-		T_TcpServer.__init__(self, Exit)
+		T_TcpServer.__init__(self, host, Exit)
 				
 		self.parent					= parent
 		self.monitors				= monitors
@@ -166,7 +168,7 @@ class NetareaManager(P_TcpServer):
 	"""
 		Warning : One netareamanager by netarea on the whole network
 	"""
-	def __init__(self, net_area, out_workers, maxInTasksSize, 
+	def __init__(self, host, net_area, out_workers, maxInTasksSize, 
 	maxDoneTasksSize, maxOutTasksSize, useragent, delay, maxTasksMapSize, 
 	maxRobotsSize, shared_used_ram) :
 		"""
@@ -176,7 +178,7 @@ class NetareaManager(P_TcpServer):
 			@param maxRamSize		- maxsize of the tasks list kept in ram( in Bytes )
 			@param numOverseer		- 
 		"""
-		P_TcpServer.__init__(self)
+		P_TcpServer.__init__(self, '')
 		
 		self.slaveMap			= {}
 		

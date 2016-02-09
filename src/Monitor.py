@@ -80,7 +80,7 @@ class LogicalNode: # in a logical ring
 		return self.identity == node.identity
 		
 class MonServer(T_TcpServer):
-	def __init__(self, port, monitors, ev_leader, masterReports, 
+	def __init__(self, host, port, monitors, ev_leader, masterReports, 
 		slaveReports, netTree, Exit, monitors_lock, masters_lock, 
 		slaves_lock, netTree_lock, Propagate):
 			
@@ -88,7 +88,7 @@ class MonServer(T_TcpServer):
 		self.monitors		= monitors
 		self.ev_leader		= ev_leader #to announce if it's the leader to Monitor
 		
-		T_TcpServer.__init__(self, Exit)
+		T_TcpServer.__init__(self, host, Exit)
 		
 		self.client			= TcpClient()
 		
@@ -269,14 +269,13 @@ class MasterOut(Thread):
 			sleep(1)
 					
 class Monitor(Thread):
-	def __init__(self, port, monitors, limitFreeMasters):
+	def __init__(self, host, port, monitors, limitFreeMasters):
 		"""
 			@param limitFreeMasters - minimum number of master which are not overload in the cluster
 		"""
-		
 		self.monitors			= {}
-		for host, port in monitors:
-			mon	= MonitorReport(host, port)
+		for _host, _port in monitors:
+			mon	= MonitorReport(_host, _port)
 			self.monitors[  (mon.host, mon.port) ] = mon
 			
 		self.limitFreeMasters 	= limitFreeMasters
@@ -287,13 +286,14 @@ class Monitor(Thread):
 		self.masterReports 		= {} #received reports from masters
 		self.slaveReports 		= {} 
 		self.netTree			= NetareaTree()
-				
+	
 		self.monitors_lock		= RLock()
 		self.masters_lock		= RLock()
 		self.slaves_lock		= RLock()
 		self.netTree_lock		= RLock()
-		
-		self.server				= MonServer( port,
+		self.server				= MonServer( 
+			host, 
+			port,
 			self.monitors,
 			self.Leader,
 			self.masterReports,

@@ -22,6 +22,7 @@ else:
 		level=logging.INFO)
 
 monitor = Monitor(
+	host			= config['General']['host'],
 	monitors		= [('127.0.1.1', 1984)],
 	port			= 1984,
 	limitFreeMasters= int(config['General']['limitFreeMasters'])
