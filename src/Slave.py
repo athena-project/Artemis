@@ -619,8 +619,8 @@ class VSlave(P_TcpServer):
 		self.host = self.get_host()
 		
 		self.monitors			= {}
-		for host, port in monitors:
-			mon	= MonitorReport(host, port)
+		for _host, _port in monitors:
+			mon	= MonitorReport(_host, _port)
 			self.monitors[  (mon.host, mon.port) ] = mon
 		self.useragent			= useragent
 		

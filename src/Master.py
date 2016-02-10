@@ -32,8 +32,8 @@ class Master():
 	def __init__(self, host, monitors, useragent, delay, maxNumNetareas, 
 	maxRamNetarea):
 		self.monitors			= {}
-		for host, port in monitors:
-			mon	= MonitorReport(host, port)
+		for _host, _port in monitors:
+			mon	= MonitorReport(_host, _port)
 			self.monitors[  (mon.host, mon.port) ] = mon
 		self.num_cores			= os.cpu_count()
 		self.maxRam				= maxNumNetareas * maxRamNetarea 
