@@ -1,3 +1,4 @@
+-> Auto-installer( for mastert/slave/monitor, conifg monitors fichier.conf)
 -> Use DHT like algorithms instead of NetTree. 
--> New allocation algorithm for netarea, in order to uniformly balance load on masters.
+-> Use some delta compressing to send NetTree.
 -> Use a gaussian law for refreshrate.
