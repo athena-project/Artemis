@@ -10,17 +10,18 @@ from threading import Thread, RLock, Event
 from multiprocessing import Process, Queue
 from .Utility import serialize, unserialize
 from copy import deepcopy
-from math import ceil
+from math import ceil, floor
 from .Netarea import NetareaTree, MAX as NETAREA_MAX
 from enum import IntEnum
 import logging
 from collections import defaultdict
 
 import traceback, sys
+from blist import sortedlist
 
 debug=True
 
-FIRST_RATE			= 0.6 #proportion de netarea alloué la première fois
+FIRST_RATE			= 0.5 #proportion de netarea alloué la première fois
 
 #Constantes used in Leader election
 class Status(IntEnum):
@@ -332,61 +333,61 @@ class Monitor(Thread):
 					return True
 		return False
 		
-	def first_allocation(self):
-		print("first allocation")
-		with self.masters_lock:
-			masters =  deepcopy( list(self.masterReports.values() ))
-		
+	def first_allocation(self, masters):		
 		max_netareas = sum([r.maxNumNetareas for r in masters])
 		if max_netareas == 0:
 			return
 		
-		free_netareas = int( FIRST_RATE * max_netareas )
-		i = 0
-		
 		begin = 0
-		step = ceil(NETAREA_MAX / float(max_netareas-free_netareas))
-
-		for master in masters:
-			for j in range( master.maxNumNetareas ):
-				if  i < max_netareas-free_netareas :
-					net	=NetareaReport(master.host, -1, begin,0, 1<<25, 
+		step = ceil(NETAREA_MAX / int( FIRST_RATE * max_netareas ))
+		last = None
+				
+				
+		for m in masters:
+			for i in range( floor(m.maxNumNetareas * FIRST_RATE) ): #floor needed otherwith some netarea will be above NETAREA_MAX
+				net	= NetareaReport(m.host, -1, begin,0, 1<<25, 
 						begin+step)
-					master.allocate( net )
-					begin	+= step
-					i+=1
-				else:
-					break
-					
+				begin += step
+				m.allocate( net )
+				last = net
+		
+		if last : #due to ceil and floor
+			last.next_netarea = NETAREA_MAX 
+				
 		self.propagate(masters)
-	
-	#Idée pour une meilleur allocation( quasi-lineaire)
-	#on cherche à avoir toutes les masters charge a x% : moyenne
-	#après on l'applique tout en evitant d'avoir a depalcé un netarea			
+			
 	def allocate(self, masters, unallocated_netarea):
 		"""
 			assuming all masters are alive, ie call prune before
 		"""
-		free_masters = [ master for master in masters if 
-			not master.is_overload() ]
-
-		try:
-			for netarea in unallocated_netarea:
-				free_masters[-1].allocate( netarea )
-				if free_masters[-1].is_overload():
-					free_masters.pop()
-			
-			if( sum([ int(not master.is_overload()) 
-				for master in masters ]) < self.limitFreeMasters):
-				logging.warning( 
-					"Masters should be added, system will be overload")
-			
-		except Exception as e: # if not a free_master remains
-			logging.debug( "%s %s" % (
-				traceback.extract_tb(sys.exc_info()[2]), str(e)))
+		if not masters:
 			logging.critical( 
 				"Masters must be added, system is overload")
-				
+			return None
+		
+		while( unallocated_netarea ):
+			medium_load = float(sum([ m.load() for m in masters ])) / len( masters )
+			under_loaded = sortedlist( [ m for m in masters if m.load() <= medium_load ] ) #<= for the first alloc : all load = 0
+			if not under_loaded :
+				under_loaded = [ m for m in masters if not m.is_overload() ]
+				if not under_loaded :
+					logging.critical( 
+					"Masters must be added, system is overload")
+					return None
+					
+			while( unallocated_netarea and under_loaded):		
+				m = under_loaded.pop( 0 )
+				m.allocate( unallocated_netarea.pop() )
+				if( m.load() < medium_load ):
+					under_loaded.add( m )
+			
+		if( sum([ int(not master.is_overload()) 
+			for master in masters ]) < self.limitFreeMasters):
+			logging.warning( 
+				"Masters should be added, system will be overload")
+		
+		self.propagate(masters)
+		
 	def prune(self):
 		with self.masters_lock:
 			unallocated_netarea	= [ net 
@@ -442,7 +443,7 @@ class Monitor(Thread):
 			masters =  deepcopy( list(self.masterReports.values() ))
 			
 		if sum([ len(r.netarea_reports) for r in self.masterReports.values() ]) == 0:
-			self.first_allocation()#No netarea allocated
+			self.first_allocation( masters )#No netarea allocated
 			return 
 		
 		if not self.is_overload( masters ):
