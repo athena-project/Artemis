@@ -10,13 +10,13 @@ class NoPassField(Exception):
 	pass
 
 class FormNature(Enum): #see Fromasaurus
-	search		= "s"
-	login		= "l"
-	register  	= "r"
-	recovery	= "p" 
-	mail		= "m"
-	contact		= "c"
-	other		= "o"
+	search		= "search"
+	login		= "login"
+	register  	= "registration"
+	recovery	= "password/login recovery" 
+	mail		= "join mailing list	"
+	contact		= "contact/comment"
+	other		= "other"
 
 def build(url, html, nature):
 	return forms[nature]( url, html, nature)

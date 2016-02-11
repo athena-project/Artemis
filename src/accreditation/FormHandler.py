@@ -3,7 +3,7 @@ from .Form import build
 from artemis.handlers.HandlerRules import getHandler
 from artemis.Task import buildFromURI, Task, AuthNature
 
-from formasaurus import FormExtractor
+import formasaurus
  
 class FormHandler :
 	def __init__(self):
@@ -16,9 +16,8 @@ class FormHandler :
 		
 		doc = html.document_fromstring(str(tmpFile.read()), base_url=task.url)
 		
-		ex = FormExtractor.load()
 		forms= []
-		for form, cl in ex.extract_forms(doc):
+		for form, cl in formasaurus.extract_forms(doc):
 			if nature == cl :
 				forms.append( build( url, html.tostring(form), nature ) )
 
