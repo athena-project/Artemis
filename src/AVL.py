@@ -50,6 +50,7 @@ class AVL:
 	def suppr(self, key):
 		self.root.suppr( key)
 		self.number-=1
+		
 	
 class AVLNode:#see Yves le maire exo6.3 AVL
 	def __init__(self, key="", value=None, left=None, right=None):
@@ -198,6 +199,10 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 		elif  key>self.key:
 			self.right.suppr(key)
 		else:
+			if self.right == None and self.left==None:
+				del self
+				return 
+			
 			if self.right == None:
 				self.key= self.left.key
 				self.value = self.left.value
@@ -206,7 +211,6 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 				del self.left
 			else:
 				node, nothing = self.right.suppr_min()
-				print(node)
 				self.key = node.key
 				self.value = node.value
 		self.update()
