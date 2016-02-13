@@ -48,7 +48,10 @@ class AVL:
 		self.root 	= avlB.root
 			
 	def suppr(self, key):
-		self.root.suppr( key)
+		if self.number == 1 and self.root.key == key:
+			self.root = None
+		else:
+			self.root.suppr( key, self.root)
 		self.number-=1
 		
 	
@@ -164,7 +167,7 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 			else:
 				self.left.add( new_node )
 		elif  new_node.key == self.key :
-			raise AlreadyExists
+			raise AlreadyExists(key)
 		else :
 			if self.right == None :
 				self.right = new_node
@@ -191,27 +194,67 @@ class AVLNode:#see Yves le maire exo6.3 AVL
 			self.left = right_node
 			self.update()
 			self.balance()
-			return node, None
+			return node, self
 			
-	def suppr(self, key):
-		if key<self.key:
-			self.left.suppr(key)
-		elif  key>self.key:
-			self.right.suppr(key)
+	def erase(self, node):
+		if node.key<self.key:
+			self.left = None
 		else:
-			if self.right == None and self.left==None:
-				del self
-				return 
+			self.right = None
+			
+	#current parent du pere pointant sur le fils courabnt
+	def suppr(self, key, parent):
+		if key<self.key:
+			self.left.suppr(key, self)
+		elif  key>self.key:
+			self.right.suppr(key, self)
+		else:
+			if self.right == None and self.left == None:
+				parent.erase( self )
+				return
 			
 			if self.right == None:
 				self.key= self.left.key
 				self.value = self.left.value
-				self.left = self.left.left
 				self.right = self.left.right
+				self.left = self.left.left
+
 				del self.left
 			else:
-				node, nothing = self.right.suppr_min()
+				node, right_node = self.right.suppr_min()
 				self.key = node.key
 				self.value = node.value
+				self.right = right_node
 		self.update()
-		self.balance()		
+		self.balance()	
+		
+	def search(self, key):
+		if self.key == key :
+			return self.value
+		elif key < self.key :
+			if self.left != None :
+				return self.left.search(key)
+			else :
+				return self.value 
+		else :
+			if self.right != None :
+				return self.right.search(key)
+			else :
+				return self.value	
+
+	def next(self, key, parent=None):
+		"""
+		first >=key
+		"""
+		if self.key == key :
+			return self.value
+		elif key < self.key :
+			if self.left != None :
+				return self.left.next(key, self)
+			elif self.right != None:
+				return self.value  
+		else :
+			if self.right != None :
+				return self.right.next(key, self)
+			else :
+				return self.parent	#min right	

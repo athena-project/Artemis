@@ -49,6 +49,18 @@ class Report(AbstractReport):
 	def load(self):
 		return float(self.used_ram)/self.max_ram
 		
+	def __ge__(self, that):
+		return self.load() >= that.load()
+
+	def __gt__(self, that):
+		return self.load() > that.load()
+		
+	def __le__(self, that):
+		return self.load() <= that.load()
+
+	def __lt__(self, that):
+		return self.load() < that.load()
+		
 	def is_overload(self):
 		return self.load()>0.85
 		
@@ -89,8 +101,11 @@ class MasterReport(Report):
 		
 		self.deathtime	= time.time() + lifetime
 	
+	def load(self):
+		return float(len(self.netarea_reports))/self.maxNumNetareas
+	
 	def is_overload(self):
-		return self.maxNumNetareas < len( self.netarea_reports)
+		return self.maxNumNetareas <= len( self.netarea_reports)
 	
 	def allocate(self, net):
 		self.netarea_reports.append( net )

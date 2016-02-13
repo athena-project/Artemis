@@ -143,17 +143,13 @@ class MasterServer(T_TcpServer):
 		msg	= TcpServer.callback(self, data)
 		
 		if msg.t == MsgType.ANNOUNCE_NETAREA_UPDATE :
-			report 	= msg.obj
-			
 			with self.netarea_reports_lock :
-				for netarea in report.netarea_reports:
-					if( netarea.netarea in self.netarea_reports and 
-					netarea.next_netarea != 
-					self.netarea_reports[ netarea.netarea ]): #modified
-						self.netarea_reports[ netarea.netarea ].next_netarea 		= netarea.next_netarea
-						self.netarea_reports[ netarea.netarea ].used_ram 			= 0 					
-					else :
-						self.parent.start_netareamanager( netarea )
+				for net in msg.obj[1]: #modified
+					self.netarea_reports[ net.netarea ].next_netarea= net.next_netarea
+					self.netarea_reports[ net.netarea ].used_ram 	= 0 
+					
+				for net in msg.obj[0]: #add
+					self.parent.start_netareamanager( net )	
 		elif msg.t == MsgType.ANNOUNCE_MONITORS:
 			with self.monitors_lock:
 				self.monitors.clear()

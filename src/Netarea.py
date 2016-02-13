@@ -39,39 +39,9 @@ class NetareaTree( AVL ):
 		node.max_ram	= netarea.max_ram
 		
 	def __setitem__(self, key, item):
-		self.add( NetareaNode(key, item) )
+		self.add( AVLNode(key, item) )
 		
 class NetareaNode(AVLNode):
 	def __init__(self, netarea=0, value=None, left=None, right=None):
 		AVLNode.__init__(self,netarea, value, left, right)
 		
-	def search(self, netarea):
-		if self.key == netarea :
-			return self.value
-		elif netarea < self.key :
-			if self.left != None :
-				return self.left.search(netarea)
-			else :
-				return self.value 
-		else :
-			if self.right != None :
-				return self.right.search(netarea)
-			else :
-				return self.value	
-
-	def next(self, netarea, parent=None):
-		"""
-		first >=netarea
-		"""
-		if self.key == netarea :
-			return self.value
-		elif netarea < self.key :
-			if self.left != None :
-				return self.left.next(netarea, self)
-			elif self.right != None:
-				return self.value  
-		else :
-			if self.right != None :
-				return self.right.next(netarea, self)
-			else :
-				return self.parent	#min right

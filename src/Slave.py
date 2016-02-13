@@ -752,15 +752,37 @@ class VSlave(P_TcpServer):
 		elif( msg.t == MsgType.ANNOUNCE_NET_TREE_PROPAGATE 
 		and self.running):
 			with self.netTree_lock:
-				self.netTree.update( msg.obj )
+				for net in msg.obj[1]:
+					self.netTree.suppr( net.netarea )
+
+				for net in msg.obj[0]:
+					self.netTree[ net.netarea] = net
+					
+				for net in msg.obj[2]:
+					self.netTree[ net.netarea ].next_netarea= net.next_netarea
+					self.netTree[ net.netarea ].used_ram 	= net.used_ram 
 			self.start_sender()	
-		elif( (msg.t == MsgType.ANNOUNCE_NET_TREE 
-			or msg.t == MsgType.ANNOUNCE_NET_TREE_PROPAGATE) 
-		and not msg.obj.empty() and not self.running):
+		elif( msg.t == MsgType.ANNOUNCE_NET_TREE and not msg.obj.empty() 
+		and not self.running):
 			with self.netTree_lock:
 				self.netTree.update( msg.obj  )
 			self.harness()
 			self.running= True
+		elif(msg.t == MsgType.ANNOUNCE_NET_TREE_PROPAGATE and not self.running ):
+			with self.netTree_lock:
+				for net in msg.obj[1]:
+					self.netTree.suppr( net.netarea )
+				
+				for net in msg.obj[0]:
+					self.netTree[ net.netarea] = net
+					
+				for net in msg.obj[2]:
+					self.netTree[ net.netarea ].next_netarea= net.next_netarea
+					self.netTree[ net.netarea ].used_ram 	= net.used_ram 
+			
+				if not self.netTree.empty():
+					self.harness()
+					self.running= True
 		elif msg.t == MsgType.ANNOUNCE_MONITORS:
 			with self.monitors_lock:
 				self.monitors.clear()

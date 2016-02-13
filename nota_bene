@@ -14,19 +14,20 @@ etude sleep time
 
 etude timeout (surtout dans tcpclient/server)
 
+bug arc cache : get retourne empty but exists in data
 
 config parfeu pour torrent/tor
 config transimission pour recupérer les fichiers téléchargés dans le bon dossier
 
 TODO :
 	verifier l'évolution de la ram consommée dans les rapports
-		
 	scale : 
 		test scale slaves : faileover sans reprise
 		test scale mons : faileover sans reprise
 		test scale master : faileover sans reprise
 		
-	
+	faudrait une liste des netarea qui n'ont pas été allouée, pour pouvoir reprendre plus tard
+	plus gestion dans netTree des netareas pas la => erreur 
 	permet master/ slave et continuation (notament dans netree)
 
 Amelioration : 

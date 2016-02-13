@@ -156,6 +156,18 @@ class MonServer(T_TcpServer):
 				self.client.send( 
 					Msg(MsgType.ANNOUNCE_NET_TREE, self.netTree), 
 					msg.obj.host, msg.obj.port)
+		elif msg.t == MsgType.ANNOUNCE_DELTA_NET_TREE:
+			if not self.ev_leader.is_set():
+				with self.netTree_lock:
+					for net in msg.obj[1]:
+						self.netTree.suppr( net.netarea )
+
+					for net in msg.obj[0]:
+						self.netTree[ net.netarea] = net
+						
+					for net in msg.obj[2]:
+						self.netTree[ net.netarea ].next_netarea= net.next_netarea
+						self.netTree[ net.netarea ].used_ram 	= net.used_ram 
 		elif msg.t == MsgType.ANNOUNCE_NET_TREE:
 			if not self.ev_leader.is_set():
 				with self.netTree_lock:
@@ -311,6 +323,7 @@ class Monitor(Thread):
 		self.slaveReports 		= {} 
 		self.delta_slaves		= ([], []) #first list : addition, second : deletion
 		self.netTree			= NetareaTree()
+		self.delta_netareas		= (defaultdict(list), defaultdict(list), defaultdict(list)) #first list : addition, second : deletion [0][masters]=[netareas]
 
 		self.monitors_lock		= RLock()
 		self.masters_lock		= RLock()
@@ -378,6 +391,7 @@ class Monitor(Thread):
 			for i in range( floor(m.maxNumNetareas * FIRST_RATE) ): #floor needed otherwith some netarea will be above NETAREA_MAX
 				net	= NetareaReport(m.host, -1, begin,0, 1<<25, 
 						begin+step)
+				self.delta_netareas[0][m].append( net )
 				begin += step
 				m.allocate( net )
 				last = net
@@ -407,8 +421,10 @@ class Monitor(Thread):
 					return None
 					
 			while( unallocated_netarea and under_loaded):		
-				m = under_loaded.pop( 0 )
-				m.allocate( unallocated_netarea.pop() )
+				m, net = under_loaded.pop( 0 ), unallocated_netarea.pop()
+				self.delta_netareas[0][m].append( net )
+				m.allocate( net )
+				
 				if( m.load() < medium_load ):
 					under_loaded.add( m )
 			
@@ -421,14 +437,13 @@ class Monitor(Thread):
 		
 	def prune(self):
 		with self.masters_lock:
-			unallocated_netarea	= [ net 
-				for report in self.masterReports.values() 
-				if( report.is_expired()) 
-				for net in report.netarea_reports ]
-			del_key	= [ key 
-				for key, report in self.masterReports.items() 
-				if( report.is_expired()) ]
-				
+			del_key, unallocated_netarea = [], []
+			for key, m in self.masterReports.items():
+				if m.is_expired() :
+					del_key.append( key )
+					self.delta_netareas[1][m].extend( m.netarea_reports )
+					unallocated_netarea.extend( m.netarea_reports )
+					
 			for key in del_key:
 				del self.masterReports[key]
 				
@@ -492,11 +507,9 @@ class Monitor(Thread):
 			for netarea in master.netarea_reports:
 				if netarea.is_overload():
 					net1	= netarea.split()
-					
-					if not master.is_overload():
-						master.allocate( net1 )
-					else:
-						unallocated_netarea.append(net1)
+					self.delta_netarea[2][master].append(netarea)					
+
+					unallocated_netarea.append(net1)
 		
 		self.allocate( masters, unallocated_netarea)		
 		return masters
@@ -517,16 +530,24 @@ class Monitor(Thread):
 					Msg(MsgType.ANNOUNCE_NET_TREE_UPDATE_INCOMING, None), 
 					slave.host, slave.port)
 		sleep(2)
-		#with self.netTree_lock: 
-			#self.netTree.update( net_tree )
-			#for master in masters:
-				#for netarea in master.netarea_reports:
-					#self.netTree.update_netarea(netarea)
 		 
 		#Start new netarea
-		for master in masters:
+		#on suppose que l'on a pas besoin d'arreter les netareas : le master les hebergeant est perdu...?
+		#verification quand on recupère un rappport pour netarea..
+		updated_masters = {} # de liste
+		for master, nets in self.delta_netareas[0].items():
+			updated_masters[master]=[ nets, [] ]
+			
+		for master, nets in self.delta_netareas[2].items():
+			if master in updated_masters:
+				updated_masters[master][1] = nets 
+			else:
+				updated_masters[master]=[ [], nets ]
+
+			
+		for master, u_nets in updated_masters.items():
 			self.client.send( 
-				Msg(MsgType.ANNOUNCE_NETAREA_UPDATE, master), 
+				Msg(MsgType.ANNOUNCE_NETAREA_UPDATE, u_nets), 
 				master.host, master.port)
 				
 		sleep(2)#master envoi la reponse toutes les secondes s'il ne répond pas tampis
@@ -541,26 +562,33 @@ class Monitor(Thread):
 				for master in self.masterReports.values():
 					for netarea in master.netarea_reports:
 						try:
-							self.netTree.update_netarea(netarea)
+							self.netTree.update_netarea(netarea) # faut recup port de netarea notament
 						except Exception as e:
 							logging.debug( "%s %s" % (
 								traceback.extract_tb(sys.exc_info()[2]),
 								str(e)))
-		
-			netTree = deepcopy( self.netTree )
-	
+			
 		#Start Slave.sender
+		deltas = ([],[],[])
+		for k in range(3):
+			for nets in self.delta_netareas[k].values():
+				deltas[k].extend( nets )
+				
 		with self.slaves_lock :
-			for slave in self.slaveReports.values():			
+			for slave in self.slaveReports.values():		
 				self.client.send( 
-					Msg(MsgType.ANNOUNCE_NET_TREE_PROPAGATE, netTree ), 
+					Msg(MsgType.ANNOUNCE_NET_TREE_PROPAGATE, deltas ), 
 					slave.host, slave.port)
 		
 		with self.monitors_lock:
 			for m_host, m_port in self.monitors :
-				self.client.send( Msg(MsgType.ANNOUNCE_NET_TREE, 
-				netTree), m_host, m_port )
+				self.client.send( Msg(MsgType.ANNOUNCE_DELTA_NET_TREE, 
+				deltas), m_host, m_port )
+		
 		self.Propagate.clear()
+		self.delta_netareas[0].clear()
+		self.delta_netareas[1].clear()
+		self.delta_netareas[2].clear()
 		logging.debug("Propagate, done")
 		
 	def run(self):	
