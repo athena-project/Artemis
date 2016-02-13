@@ -618,10 +618,7 @@ class VSlave(P_TcpServer):
 		P_TcpServer.__init__(self, host)
 		self.host = self.get_host()
 		
-		self.monitors			= {}
-		for _host, _port in monitors:
-			mon	= MonitorReport(_host, _port)
-			self.monitors[  (mon.host, mon.port) ] = mon
+		self.monitors			= monitors
 		self.useragent			= useragent
 		
 		self.maxCrawlers		= maxCrawlers

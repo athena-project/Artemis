@@ -84,7 +84,7 @@ class MonServer(T_TcpServer):
 	def __init__(self, host, port, monitors, ev_leader, masterReports, 
 		slaveReports, netTree, Exit, monitors_lock, masters_lock, 
 		slaves_lock, netTree_lock, Propagate):
-			
+
 		self.port			= port
 		self.monitors		= monitors
 		self.ev_leader		= ev_leader #to announce if it's the leader to Monitor
@@ -274,11 +274,7 @@ class Monitor(Thread):
 		"""
 			@param limitFreeMasters - minimum number of master which are not overload in the cluster
 		"""
-		self.monitors			= {}
-		for _host, _port in monitors:
-			mon	= MonitorReport(_host, _port)
-			self.monitors[  (mon.host, mon.port) ] = mon
-			
+		self.monitors			= monitors
 		self.limitFreeMasters 	= limitFreeMasters
 		self.Exit 				= Event()
 		self.Leader 			= Event()
@@ -287,7 +283,7 @@ class Monitor(Thread):
 		self.masterReports 		= {} #received reports from masters
 		self.slaveReports 		= {} 
 		self.netTree			= NetareaTree()
-	
+
 		self.monitors_lock		= RLock()
 		self.masters_lock		= RLock()
 		self.slaves_lock		= RLock()

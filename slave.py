@@ -1,14 +1,20 @@
 import configparser
+import json
 import logging
 import sys
 from collections import defaultdict
 from artemis.Slave import Slave
-
+from artemis.network.Reports import MonitorReport
 debug = True
 
 config = configparser.ConfigParser()
 config.optionxform=str
 config.read('/usr/local/conf/artemis/slave.ini')
+
+monitors_map = json.load( open('/usr/local/conf/artemis/monitors.json', 'r') )
+monitors = {}
+for _host, _port in monitors_map.items():
+	monitors[(_host, _port)] = MonitorReport(_host, int(_port) ) 
 
 if debug :
 	logging.basicConfig(
@@ -28,7 +34,7 @@ def configDict2boolDict(cDict):
 
 s=Slave(
 	host					= config['General']['host'],
-	monitors				= [('127.0.1.1', 1984)],
+	monitors				= monitors,
 	serverNumber			= int( config['General']['serverNumber'] ), 
 	useragent				= config['General']['useragent'], 
 	maxCrawlers				= int( config['Thread']['maxCrawlers'] ),  
