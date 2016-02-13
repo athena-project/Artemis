@@ -234,6 +234,12 @@ class NetareaManager(P_TcpServer):
 			with self.slaves_lock:
 				self.slaveMap.clear()
 				self.slaveMap.update( msg.obj )	
+		elif msg.t == MsgType.ANNOUNCE_DELTA_SLAVE_MAP:
+			with self.slaves_lock:
+				for slave in msg.obj[1]: #deletion first
+					del self.slaveMap[ slave.id() ]
+				for slave in msg.obj[0]:
+					self.slaveMap[ slave.id() ] = slave
 		else:
 			logging.info("Unknow received msg %s" % msg.pretty_str())
 

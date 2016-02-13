@@ -9,10 +9,6 @@ from .AVL import EmptyAVL
 import mimetypes
 import sys, traceback
 
-#for out_interface debug.....
-#from .network.AMQPConsumer import AMQPConsumer
-#from .network.AMQPProducer import AMQPProducer 
-
 import transmissionrpc 
 
 import tempfile

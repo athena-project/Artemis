@@ -81,12 +81,14 @@ class LogicalNode: # in a logical ring
 		return self.identity == node.identity
 		
 class MonServer(T_TcpServer):
-	def __init__(self, host, port, monitors, ev_leader, masterReports, 
-		slaveReports, netTree, Exit, monitors_lock, masters_lock, 
-		slaves_lock, netTree_lock, Propagate):
+	def __init__(self, host, port, monitors, delta_monitors, ev_leader, 
+		masterReports, slaveReports, delta_slaves, netTree, Exit, 
+		monitors_lock, masters_lock, slaves_lock, delta_slaves_lock, 
+		netTree_lock, Propagate):
 
 		self.port			= port
 		self.monitors		= monitors
+		self.delta_monitors	= delta_monitors
 		self.ev_leader		= ev_leader #to announce if it's the leader to Monitor
 		
 		T_TcpServer.__init__(self, host, Exit)
@@ -95,11 +97,13 @@ class MonServer(T_TcpServer):
 		
 		self.masterReports	= masterReports
 		self.slaveReports	= slaveReports
+		self.delta_slaves	= delta_slaves
 		self.netTree		= netTree
 		
 		self.monitors_lock	= monitors_lock
 		self.masters_lock	= masters_lock
 		self.slaves_lock	= slaves_lock
+		self.delta_slaves_lock	= delta_slaves_lock
 		self.netTree_lock	= netTree_lock
 				
 		self.Propagate		= Propagate
@@ -125,6 +129,9 @@ class MonServer(T_TcpServer):
 						Msg(MsgType.ANNOUNCE_NET_TREE, self.netTree), 
 						msg.obj.host, msg.obj.port)
 			
+			with self.delta_slaves_lock:	
+				self.delta_slaves[0].append( msg.obj )
+				
 			with self.slaves_lock:
 				self.slaveReports[ msg.obj.id() ] = msg.obj
 				
@@ -141,8 +148,10 @@ class MonServer(T_TcpServer):
 				self.masterReports[ msg.obj.id() ] = msg.obj
 		elif msg.t == MsgType.MONITOR_HEARTBEAT:
 			with self.monitors_lock:
+				if not msg.obj in self.monitors:
+					self.delta_monitors[0].append( msg.obj )
 				self.monitors[ msg.obj.id() ] = msg.obj
-				
+					
 			with self.netTree_lock:
 				self.client.send( 
 					Msg(MsgType.ANNOUNCE_NET_TREE, self.netTree), 
@@ -216,20 +225,24 @@ class MonServer(T_TcpServer):
 			logging.info("Unknow received msg %s" % msg.pretty_str())
 
 class MasterOut(Thread):
-	def __init__(self, host, port, monitors, Leader, masterReports, 
-		slaveReports,  Exit, monitors_lock, masters_lock, slaves_lock):
+	def __init__(self, host, port, monitors, delta_monitors, Leader, 
+		masterReports, slaveReports,  delta_slaves, Exit, monitors_lock, 
+		masters_lock, slaves_lock, delta_slaves_lock):
 		Thread.__init__(self)
 		
-		self.host			= host
-		self.port			= port
-		self.monitors		= monitors
-		self.slaveReports	= slaveReports
-		self.masterReports	= masterReports
-		self.Leader			= Leader
-		self.Exit			= Exit
-		self.monitors_lock	= monitors_lock
-		self.masters_lock	= masters_lock
-		self.slaves_lock	= slaves_lock
+		self.host				= host
+		self.port				= port
+		self.monitors			= monitors
+		self.delta_monitors		= delta_monitors
+		self.slaveReports		= slaveReports
+		self.delta_slaves		= delta_slaves
+		self.masterReports		= masterReports
+		self.Leader				= Leader
+		self.Exit				= Exit
+		self.monitors_lock		= monitors_lock
+		self.masters_lock		= masters_lock
+		self.slaves_lock		= slaves_lock
+		self.delta_slaves_lock	= delta_slaves_lock
 		
 		self.client = TcpClient()
 
@@ -238,26 +251,39 @@ class MasterOut(Thread):
 		while not self.Exit.is_set():
 			if self.Leader.is_set():
 				with self.monitors_lock:
-					msg2 			= Msg(MsgType.ANNOUNCE_MONITORS, 
-						self.monitors)
+					flag2 = ( self.delta_monitors[0] == [] and self.delta_monitors[1] == [] )
+					if not flag2:
+						msg2 = Msg(MsgType.ANNOUNCE_MONITORS, deepcopy(self.delta_monitors))
+						self.delta_monitors[0].clear()
+						self.delta_monitors[1].clear()
 					
-				with self.slaves_lock:
-					msg1 			= Msg(MsgType.ANNOUNCE_SLAVE_MAP, 
-						self.slaveReports)
+				with self.slaves_lock and self.delta_slaves_lock:
+					flag1 = ( self.delta_slaves[0] == [] and self.delta_slaves[1] == [] )
+					if not flag1:
+						msg1 = Msg(MsgType.ANNOUNCE_DELTA_SLAVE_MAP, 
+							self.delta_slaves)
+					
+					if not flag2 and not flag:
+						continue
 						
 					with self.masters_lock:
 						for master in self.masterReports.values():
-							self.client.send( msg2, master.host, 
-								master.port )
+							if not flag2 :
+								self.client.send( msg2, master.host, 
+									master.port )
 							
-							for report in master.netarea_reports:
-								self.client.send( msg1, report.host, 
+							if not flag1:
+								for report in master.netarea_reports:
+									self.client.send( msg1, report.host, 
+										report.port )
+							
+						if not flag2 :	
+							for report in self.slaveReports.values():
+								self.client.send( msg2, report.host, 
 									report.port )
-							
-							
-						for report in self.slaveReports.values():
-							self.client.send( msg2, report.host, 
-								report.port )
+					if not flag1:
+						self.delta_slaves[0].clear()
+						self.delta_slaves[1].clear()
 
 			#heartbeat
 			with self.monitors_lock:
@@ -275,6 +301,7 @@ class Monitor(Thread):
 			@param limitFreeMasters - minimum number of master which are not overload in the cluster
 		"""
 		self.monitors			= monitors
+		self.delta_monitors		= ([], []) #first list : addition, second : deletion 
 		self.limitFreeMasters 	= limitFreeMasters
 		self.Exit 				= Event()
 		self.Leader 			= Event()
@@ -282,38 +309,46 @@ class Monitor(Thread):
 		
 		self.masterReports 		= {} #received reports from masters
 		self.slaveReports 		= {} 
+		self.delta_slaves		= ([], []) #first list : addition, second : deletion
 		self.netTree			= NetareaTree()
 
 		self.monitors_lock		= RLock()
 		self.masters_lock		= RLock()
 		self.slaves_lock		= RLock()
+		self.delta_slaves_lock	= RLock()
 		self.netTree_lock		= RLock()
 		self.server				= MonServer( 
 			host, 
 			port,
 			self.monitors,
+			self.delta_monitors, 
 			self.Leader,
 			self.masterReports,
 			self.slaveReports,
+			self.delta_slaves,
 			self.netTree,
 			self.Exit,
 			self.monitors_lock,
 			self.masters_lock,
 			self.slaves_lock,
+			self.delta_slaves_lock,
 			self.netTree_lock, 
 			self.Propagate)
 		self.host				= self.server.get_host()
 		self.port				= port
 		self.masterOut			= MasterOut( self.host,
 			self.port,
-			self.monitors, 
+			self.monitors,
+			self.delta_monitors, 
 			self.Leader, 
 			self.masterReports, 
 			self.slaveReports, 
+			self.delta_slaves, 
 			self.Exit,
 			self.monitors_lock,
 			self.masters_lock,
-			self.slaves_lock)
+			self.slaves_lock,
+			self.delta_slaves_lock)
 
 		self.client 			= TcpClient()
 		logging.debug("Monitor initialized")
@@ -412,6 +447,7 @@ class Monitor(Thread):
 		with self.monitors_lock :
 			for key, monitor in list(self.monitors.items()):
 				if monitor.is_expired():
+					self.delta_monitors[1].append( monitor )
 					del self.monitors[ key ]
 					mon_flag = True
 			
@@ -422,10 +458,11 @@ class Monitor(Thread):
 					tmp_node.succ.host, tmp_node.succ.port)
 					
 
-		with self.slaves_lock:
+		with self.slaves_lock and self.delta_slaves_lock:
 			for key, slave in list(self.slaveReports.items()):
 				if slave.is_expired():
 					logging.debug( slave )
+					self.delta_slaves[1].append( slave ) 
 					del self.slaveReports[ key ]
 			
 	def buildNetTreeFromScratch(self):

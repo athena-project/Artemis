@@ -1,4 +1,2 @@
--> Auto-installer( for mastert/slave/monitor, conifg monitors fichier.conf)
 -> Use DHT like algorithms instead of NetTree. 
--> Use some delta compressing to send NetTree.
 -> Use a gaussian law for refreshrate.
