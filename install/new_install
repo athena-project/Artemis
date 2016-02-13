@@ -1,8 +1,0 @@
-python3-libtorrent
-libtorrent-dev
-
-
-openssl genrsa -aes256 -out server.key 4096
-openssl req -new -x509 -days 3650 -key server.key -out server.crt
-openssl genrsa -aes256 -out client.key 4096
-openssl req -new -x509 -days 3650 -key client.key -out client.crt

@@ -1,99 +1,115 @@
-﻿#!/bin/sh
+#!/bin/bash
 
-CURRENT_DIR=`dirname $0` #Dossier parent du script d'installation
-ARTEMIS_BIN="/usr/opt/artemis"
-ARTEMIS_CONF="/etc/artemis"
-ARTEMIS_LOG="/var/log/artemis"
+f_admin=
+f_master=
+f_monitor=
+f_slave=
 
+f_with_deps= #install dependancies
 
-###
-### BEGIN DEPENDENCES
-###
+usage="\
+Usage: $0 [OPTION]
 
-# General
-apt-get update
-apt-get upgrade
-apt-get install -y python3-dev python3-pip 
+Options:
+	--all			Install the four modules
+	--admin			Install the admin module
+	--master		Install the master module
+	--monitor		Install the monitor module
+	--slave			Install the slave module
+	
+	--with_deps 	Try to install all needed dependancies
+"
 
+while test $# -ne 0; do
+	case $1 in    
+    --all) 
+		f_admin=true
+		f_master=true
+		f_monitor=true
+		f_slave=true
+    ;;
+	
+	--admin)
+		f_admin=true
+	;;
+	
+	--master)
+		f_master=true
+	;;
+	
+	--monitor)
+		f_monitor=true
+	;;
+	
+	--slave)
+		f_slave=true
+	;;
 
-##MySQL
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 1BB943DB
-echo deb http://ftp.igh.cnrs.fr/pub/mariadb//repo/5.5/ubuntu $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/MariaDB.list 
-apt-get update
-apt-get install -y mariadb-server mariadb-client
+	--with_deps)
+		f_with_deps=true
+	;;
+	
+    --help) echo "$usage"; exit $?;;
 
-#apt-get install mysql-server
-mysql -u root -p"rj7@kAv;8d7_e(E6:m4-w&" -e "CREATE DATABASE artemis"
-mysql -u root -p"rj7@kAv;8d7_e(E6:m4-w&" -D artemis -e "SOURCE tables.sql"
-#config ?
-pip3 install  PyMySQL
+    --version) echo "$0 $scriptversion"; exit $?;;
 
+    --)	shift
+	break;;
 
-##RabbitMQ
-pip3 install amqp
+    -*)	echo "$0: invalid option: $1" >&2
+	exit 1;;
 
-##Tor
-wget https://www.torproject.org/dist/torbrowser/4.5.3/tor-browser-linux64-4.5.3_en-US.tar.xz
-tar -Jxvf tor-browser-linux64-4.5.3_en-US.tar.xz
-apt-get install python-stem
-pip3 install pysocks 
+    *)  break;;
+	esac  
+	
+	shift
+done
 
-##Formasaurus
-apt-get install libamd2.3.1 libblas3gf libc6 libgcc1  libgfortran3 liblapack3gf libumfpack5.6.2 libstdc++6 build-essential gfortran python3-all-dev libatlas-base-dev
-pip3 install numpy sklearn scipy formasaurus 
-
-#torrent
-apt-get install -y transmission-deamon python3-libtorrent #config rpc-auth = false, ratio_limit=0 no seeding see set.json, max torrent paralle à definir ici aussi
-pip3 install transmissionrpc 
-
-
-
-
-pip3 install termcolor
-
-###
-### END DEPENDENCES
-###
-
-
-###
-### BEGIN STRUCTURE
-###
-mkdir -p $ARTEMIS_BIN
-mkdir -p $ARTEMIS_CONF
-mkdir -p $ARTEMIS_LOG
-
-ln -s /usr/opt/mnemosyne/libpyRessource.so   $ARTEMIS_BIN/extras/libpyRessource.so  #petit pb de lib
-
-cp $CURRENT_DIR/../conf/* $ARTEMIS_CONF
-cp $CURRENT_DIR/../artemis/*  $ARTEMIS_BIN
-cp -r $CURRENT_DIR/../extras  $ARTEMIS_BIN
-cp $CURRENT_DIR/../log/* $ARTEMIS_LOG
-
-chmod 0711 $ARTEMIS_CONF
-chmod 0711 $ARTEMIS_BIN
-chmod 0711 $ARTEMIS_LOG
-
-mv tor-browser_en-US/Browser/TorBrowser/Tor $ARTEMIS_BIN/extras/Tor
-rm -r tor-browser_en-US
-rm tor-browser-linux64-4.5.3_en-US.tar.xz
-
-
-###
-### END STRUCTURE
-###
-
-
-
-###
-###	BEGIN FIREWALL
-###
-cp $CURRENT_DIR/firewall.sh /etc/init.d/artemis-firewall.sh
+if test -n "$f_with_deps"; then
+	apt-get install -y python3-pip 
+	pip3 install termcolor
+	
+	#if test -n "$f_admin"; then fi
+	
+	if test -n "$f_master"; then 
+		apt-get install -y libtorrent-dev python3-libtorrent
+	fi
+	
+	if test -n "$f_monitor"; then 
+		pip3 install blist
+	fi
+	
+	if test -n "$f_slave"; then 
+		apt-get install -y libtorrent-dev python3-libtorrent
 		
-chmod +x /etc/init.d/artemis-firewall.sh
-cd /etc/init.d/artemis-firewall.sh
+		#lxml
+		apt-get install -y python3-lxml
 		
-update-rc.d artemis-firewall.sh defaults
-##
-##	END FIREWALL
-##
+		#tor
+		apt-get install -y tor python3-stem
+		pip3 install pysocks 
+		
+		#formasaurus
+		apt-get install -y libamd2.3.1 libblas3gf libc6 libgcc1  
+		apt-get install -y libgfortran3 liblapack3gf libumfpack5.6.2 
+		apt-get install -y libstdc++6 build-essential gfortran  
+		apt-get install -y libatlas-base-dev python3-all-dev
+		pip3 install numpy sklearn sklearn-crfsuite scipy formasaurus
+		
+		#torrent
+		apt-get install -y transmission-daemon python3-libtorrent
+		pip3 install transmissionrpc 
+		
+		transmission-daemon stop
+		mv install/conf/transmission/settings.json /etc/transmission-daemon/settings.json
+		transmission-daemon start
+	fi
+fi
+
+mkdir -p "/var/log/artemis"
+mkdir -p "/usr/local/bin/artemis"
+mkdir -p "/tmp/artemis"
+
+cp *.py "/usr/local/bin/artemis"
+python3.4 setup.py install
+

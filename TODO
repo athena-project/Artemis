@@ -1,3 +1,24 @@
--> Use DHT like algorithms instead of NetTree. 
--> Use some delta compressing to send NetTree
--> Use a gaussian law for refreshrate.
+Config :
+	->script parfeu (transmission/tor) 
+	->dossier de stockage des téléchargements pour transmission
+	->Etude des sleep time/timeout(TCP_)/max_size(SpooledTemporaryFile)/lifetime(report|robot)
+	->Taille des caches(nottamment alreadySent)
+	
+Bugs :
+	->ARCCache : get(key) retourne EmptyItem or contains(key) retourne True
+	->NetTree corrompu dans le cas où une partie des netareas n'a pas était allouée  
+
+Tests :
+	->etude de la mémoire consommée (adéquation avec rapport, fuite mémoire)
+	->scale slave 	: faileover (avec/sans reprise) | facteur de croissance
+	->scale monitor : faileover (avec/sans reprise) | facteur de croissance
+	->scale master 	: faileover (avec/sans reprise) | facteur de croissance
+	
+New features(not bug) :
+	-> Use DHT like algorithms instead of NetTree. 
+	-> Use a gaussian law for refreshrate.
+	-> Keep a list of non-allocated netarea in order to allocate as soon as possible
+
+
+References :
+	-> Complixity Cpython: https://www.ics.uci.edu/~pattis/ICS-33/lectures/complexitypython.txt
