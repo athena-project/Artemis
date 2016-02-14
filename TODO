@@ -5,7 +5,6 @@ Config :
 	->Taille des caches(nottamment alreadySent)
 	
 Bugs :
-	->ARCCache : get(key) retourne EmptyItem or contains(key) retourne True
 	->NetTree corrompu dans le cas où une partie des netareas n'a pas était allouée  
 
 Tests :
@@ -18,7 +17,7 @@ New features(not bug) :
 	-> Use DHT like algorithms instead of NetTree. 
 	-> Use a gaussian law for refreshrate.
 	-> Keep a list of non-allocated netarea in order to allocate as soon as possible
-
+	-> Rewrite cache algorithme and Avl in C/C++
 
 References :
 	-> Complixity Cpython: https://www.ics.uci.edu/~pattis/ICS-33/lectures/complexitypython.txt

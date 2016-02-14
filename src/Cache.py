@@ -14,6 +14,7 @@ class Deque:
 	"""
 	def __init__(self):
 		self.od = collections.OrderedDict()
+		
 	def appendleft(self, k):
 		#O(1)
 		od = self.od
@@ -63,8 +64,7 @@ class ARCCache(Cache):
 		self.b2 = Deque()
 
 	def replace(self, key):
-		#O(1)
-		if self.t1 and (
+		if len(self.t1)>0 and (
 		(key in self.b2 and len(self.t1) == self.p) or
 		(len(self.t1) > self.p)):
 			old = self.t1.pop()
@@ -72,24 +72,30 @@ class ARCCache(Cache):
 		else:
 			old = self.t2.pop()
 			self.b2.appendleft(old)
-			del(self.cached[old])
+		
+		del(self.cached[old])
         
 	def __getitem__(self, key):
-		#O(1)
+		if not key in self.cached:
+			return EmptyItem()
+		
 		if key in self.t1: 
 			self.t1.remove(key)
-			self.t2.appendleft(key)
-			return self.cached[key]
 		elif key in self.t2: 
 			self.t2.remove(key)
-			self.t2.appendleft(key)
-			return self.cached[key]
-		return EmptyItem()
+			
+		self.t2.appendleft(key)
+		return self.cached[key]
 
 	def __setitem__(self, key, item): 
-		#O(1)               
-		self.cached[key] = item            
-		if key in self.b1:
+		if key in self.cached:
+			if key in self.t1: 
+				self.t1.remove(key)
+			elif key in self.t2: 
+				self.t2.remove(key)
+				
+			self.t2.appendleft(key)
+		elif key in self.b1:
 			self.p = min(
 			self.size, self.p + max(len(self.b2) / len(self.b1) , 1))
 			self.replace(key)
@@ -99,22 +105,26 @@ class ARCCache(Cache):
 			self.p = max(0, self.p - max(len(self.b1)/len(self.b2) , 1))
 			self.replace(key)
 			self.b2.remove(key)
-			self.t2.appendleft(key)           
-		elif len(self.t1) + len(self.b1) == self.size:
-			if len(self.t1) < self.size:
-				self.b1.pop()
-				self.replace(key)
-			else:
-				del self.cached[ self.t1.pop() ]
+			self.t2.appendleft(key)   
 		else:
-			total = len(self.t1) + len(self.b1) + len(
-				self.t2) + len(self.b2)
-			if total >= self.size:
-				if total == (2 * self.size):
+			l1_size = len(self.t1) + len(self.b1)
+			l2_size = len(self.t2) + len(self.b2)
+			
+			if l1_size == self.size:
+				if len(self.t1) < self.size:
+					self.b1.pop()
+					self.replace(key)
+				else:
+					del self.cached[ self.t1.pop() ]
+			elif l1_size < self.size and l1_size + l2_size >= self.size:
+				if l1_size + l2_size == 2 * self.size:
 					self.b2.pop()
 				self.replace(key)
-		self.t1.appendleft(key)
-
+			
+			self.t1.appendleft(key)
+		
+		self.cached[key] = item  
+		
 	def __len__(self):
 		return len( self.cached )
 
