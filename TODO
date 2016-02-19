@@ -14,10 +14,13 @@ Tests :
 	->scale master 	: faileover (avec/sans reprise) | facteur de croissance
 	
 New features(not bug) :
+	-> Dynamic update of the urls' paquet size( at the beginning 1 at the end max_size = 50-100 with lzma compression)
+	-> Clean TaskMap when updating netarea
 	-> Use DHT like algorithms instead of NetTree. 
 	-> Use a gaussian law for refreshrate.
 	-> Keep a list of non-allocated netarea in order to allocate as soon as possible
+	-> Use L2ARC for hybridCache
 	-> Rewrite cache algorithme and Avl in C/C++
 
 References :
-	-> Complixity Cpython: https://www.ics.uci.edu/~pattis/ICS-33/lectures/complexitypython.txt
+	-> Complexity Cpython: https://www.ics.uci.edu/~pattis/ICS-33/lectures/complexitypython.txt
