@@ -21,6 +21,6 @@ New features(not bug) :
 	-> Keep a list of non-allocated netarea in order to allocate as soon as possible
 	-> Use L2ARC for hybridCache
 	-> Rewrite cache algorithme and Avl in C/C++
-
+	-> Rewrite network with epoll( and optimisation)
 References :
 	-> Complexity Cpython: https://www.ics.uci.edu/~pattis/ICS-33/lectures/complexitypython.txt
